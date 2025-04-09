@@ -10,26 +10,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Check out the code from the main branch
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Set up Node.js (you can change the version if needed)
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '16'
           cache: 'npm'
 
-      # Step 3: Install dependencies
       - name: Install dependencies
-        run: npm install
+        run: npm ci  # This ensures a clean install for Linux
 
-      # Step 4: Build the project
       - name: Build project
         run: npm run build
 
-      # Step 5: Deploy built files to GitHub Pages using peaceiris' action
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:

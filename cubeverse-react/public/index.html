@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>3x3 DUEL</title>
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-JDV6HNZK1D"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-JDV6HNZK1D');
+  </script>
+</head>
+<body>
+  <div class="container">
+    <div id="gameContainer">
+      <div id="game">
+        <!-- The game area (start screen, battlefield, log) is populated by script.js -->
+      </div>
+    </div>
+    <div id="rulesContainer">
+      <h2>Game Rules</h2>
+      <ul>
+        <li>Both you and the enemy start with 50 HP.</li>
+        <li>Each turn, you both "solve" the Rubik's Cube simultaneously.</li>
+        <li>You enter your solving time (in seconds), and the enemy's time is simulated (from a normal distribution with mean = 11.62 and std = 1.10).</li>
+        <li>The slower solver loses HP equal to round(|difference| × 5 + 5).</li>
+        <li>If the times are equal, no damage is dealt.</li>
+        <li>You can use your helper <em>Tymon</em> (3 times per game) to substitute your time with a value between 4 and 6 sec.</li>
+        <li>Each consecutive win builds a combo, adding +1 damage for each combo level (resets when you lose).</li>
+        <li>The battle continues until one side's HP reaches 0.</li>
+      </ul>
+    </div>
+  </div>
+  
+  <!-- Audio elements for sound effects -->
+  <audio id="hitSound" src="hit.wav"></audio>
+  <audio id="victorySound" src="victory.mp3"></audio>
+  <audio id="defeatSound" src="failure.wav"></audio>
+  
+  <script src="script.js"></script>
+</body>
+</html>

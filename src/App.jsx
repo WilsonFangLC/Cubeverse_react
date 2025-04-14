@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Papa from 'papaparse';
 import StartScreen from './components/StartScreen';
 import BattleScreen from './components/BattleScreen'; 
 import GameOverScreen from './components/GameOverScreen';
@@ -41,6 +42,8 @@ function App() {
   const victorySoundRef = useRef(null);
   const defeatSoundRef = useRef(null);
 
+  const [csvData, setCsvData] = useState([]);
+
   useEffect(() => {
     // Link to the original stylesheet
     const link = document.createElement('link');
@@ -52,6 +55,26 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    // Load and parse the CSV file
+    fetch('/further_curated_data.csv')
+      .then(response => response.text())
+      .then(csvText => {
+        Papa.parse(csvText, {
+          header: true, // Enable header parsing
+          complete: (result) => {
+            setCsvData(result.data);
+          },
+        });
+      });
+  }, []);
+
+  const getRandomRow = () => {
+    if (csvData.length === 0) return null;
+    const randomIndex = Math.floor(Math.random() * csvData.length);
+    return csvData[randomIndex];
+  };
+
   // -- Game Logic Functions --
 
   const appendLog = (message) => {
@@ -59,8 +82,12 @@ function App() {
   };
 
   const processTurn = (playerTime, isTymon = false) => {
-    if (isProcessingTurn) return; 
+    if (isProcessingTurn || csvData.length === 0) return;
     setIsProcessingTurn(true);
+
+    const randomRow = getRandomRow();
+    const scramble = randomRow ? randomRow.scr : 'Unknown scramble';
+    const enemyTime = randomRow && randomRow.rest ? parseFloat(randomRow.rest) : normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
 
     // Reset effects from previous turn
     setPlayerImpact(false);
@@ -68,7 +95,6 @@ function App() {
     setComboFlashValue(0);
     // Floating damages will clear themselves via timeout
 
-    const enemyTime = normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
     let resultText = `<p>`;
     if (isTymon) {
       resultText += `<em>Tymon</em> assisted with a time of <span class="result-value">${playerTime.toFixed(2)}</span> sec. `;
@@ -76,6 +102,7 @@ function App() {
       resultText += `Your time: <span class="result-value">${playerTime.toFixed(2)}</span> sec. `;
     }
     resultText += `Enemy's time: <span class="result-value">${enemyTime.toFixed(2)}</span> sec. `;
+    resultText += `<br>Scramble: <span class="scramble">${scramble}</span>`;
 
     let nextPlayerHP = playerHP;
     let nextEnemyHP = enemyHP;
@@ -163,9 +190,10 @@ function App() {
   };
 
   const handleUseTymon = () => {
-    if (tymonCount > 0 && !isProcessingTurn) { 
+    if (tymonCount > 0 && !isProcessingTurn && csvData.length > 0) {
       setTymonCount(prev => prev - 1);
-      const tymonTime = (Math.random() * 2) + 4; 
+      const randomRow = getRandomRow();
+      const tymonTime = randomRow ? parseFloat(randomRow.time) : (Math.random() * 2) + 4;
       processTurn(tymonTime, true);
     }
   };
@@ -202,6 +230,8 @@ function App() {
       case GAME_STATES.START:
         return <StartScreen onStartBattle={handleStartBattle} />;
       case GAME_STATES.BATTLE:
+        const randomRow = getRandomRow();
+        const currentScramble = randomRow ? randomRow.scr : 'Unknown scramble';
         return (
           <BattleScreen 
             playerName={playerName}
@@ -216,6 +246,7 @@ function App() {
             enemyImpact={enemyImpact}
             floatingDamages={floatingDamages}
             comboFlashValue={comboFlashValue}
+            currentScramble={currentScramble} // Pass currentScramble to BattleScreen
           />
         );
       case GAME_STATES.GAME_OVER:

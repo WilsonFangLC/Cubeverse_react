@@ -41,6 +41,7 @@ function BattleScreen({
   logEntries,
   onSubmitTime, 
   onUseTymon, 
+  currentScramble, // Added currentScramble prop
   // Effect props
   playerImpact, 
   enemyImpact,
@@ -118,6 +119,7 @@ function BattleScreen({
         tymonCount={tymonCount}
         onSubmitTime={onSubmitTime}
         onUseTymon={onUseTymon}
+        currentScramble={currentScramble} // Pass currentScramble to TurnInput
       />
 
       <GameLog logEntries={logEntries} />
@@ -125,4 +127,4 @@ function BattleScreen({
   );
 }
 
-export default BattleScreen; 
+export default BattleScreen;

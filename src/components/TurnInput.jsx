@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function TurnInput({ tymonCount, onSubmitTime, onUseTymon }) {
+function TurnInput({ tymonCount, onSubmitTime, onUseTymon, currentScramble }) {
   const [timeInput, setTimeInput] = useState('');
 
   const handleSubmit = () => {
@@ -21,6 +21,7 @@ function TurnInput({ tymonCount, onSubmitTime, onUseTymon }) {
   return (
     <div id="turnInputArea"> {/* Added a wrapper div */}
       <h2>Your Turn</h2>
+      <p>Scramble: <span className="scramble">{currentScramble}</span></p>
       <p>Enter your solving time (in seconds):</p>
       <input 
         type="number" 
@@ -43,4 +44,4 @@ function TurnInput({ tymonCount, onSubmitTime, onUseTymon }) {
   );
 }
 
-export default TurnInput; 
+export default TurnInput;

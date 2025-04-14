@@ -8,8 +8,7 @@ import {
   INITIAL_TYMON_COUNT, 
   DAMAGE_MULTIPLIER, 
   ENEMY_TIME_MEAN, 
-  ENEMY_TIME_STD,
-  getRandomScrambleAndTime
+  ENEMY_TIME_STD 
 } from './utils/gameLogic';
 
 // Define game states
@@ -20,20 +19,6 @@ const GAME_STATES = {
 };
 
 function App() {
-  const [currentScramble, setCurrentScramble] = useState('');
-  const [enemyTime, setEnemyTime] = useState(0);
-
-  useEffect(() => {
-    async function fetchScramble() {
-      const { scramble, time: enemyTime } = await getRandomScrambleAndTime();
-      console.log('Scramble from getRandomScrambleAndTime:', scramble);
-      setCurrentScramble(scramble);
-      setEnemyTime(enemyTime);
-    }
-
-    fetchScramble();
-  }, []);
-
   // State Variables
   const [gameState, setGameState] = useState(GAME_STATES.START);
   const [playerName, setPlayerName] = useState(''); 
@@ -83,7 +68,7 @@ function App() {
     setComboFlashValue(0);
     // Floating damages will clear themselves via timeout
 
-    // Use the enemyTime state directly instead of redeclaring it
+    const enemyTime = normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
     let resultText = `<p>`;
     if (isTymon) {
       resultText += `<em>Tymon</em> assisted with a time of <span class="result-value">${playerTime.toFixed(2)}</span> sec. `;
@@ -159,14 +144,6 @@ function App() {
             setIsProcessingTurn(false); 
         }, 50); 
     }
-
-    async function fetchNewScramble() {
-      const { scramble, time: newEnemyTime } = await getRandomScrambleAndTime();
-      setCurrentScramble(scramble);
-      setEnemyTime(newEnemyTime);
-    }
-
-    fetchNewScramble();
    };
 
   // Helper function to add floating damage effect data
@@ -278,7 +255,6 @@ function App() {
       <audio ref={hitSoundRef} src="/hit.wav" preload="auto"></audio>
       <audio ref={victorySoundRef} src="/victory.mp3" preload="auto"></audio>
       <audio ref={defeatSoundRef} src="/failure.wav" preload="auto"></audio>
-      <h1>Scramble: {currentScramble}</h1>
     </div>
   );
 }

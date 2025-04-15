@@ -50,6 +50,16 @@ function StartScreen({ onStartBattle }) {
             />
             Player vs Player Mode
           </label>
+          <label style={{ marginLeft: '20px' }}>
+            <input
+              type="radio"
+              name="mode"
+              value="cooperative"
+              checked={mode === 'cooperative'}
+              onChange={() => setMode('cooperative')}
+            />
+            Cooperative Mode
+          </label>
         </div>
         <button onClick={handleStartClick}>Start Battle</button>
       </div>

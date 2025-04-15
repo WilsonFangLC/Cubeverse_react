@@ -17,6 +17,7 @@ const GAME_STATES = {
   DIFFICULTY: 'DIFFICULTY',
   BATTLE: 'BATTLE',
   GAME_OVER: 'GAME_OVER',
+  COOP_SETUP: 'COOP_SETUP', // New state for coop setup
 };
 
 function App() {
@@ -51,6 +52,12 @@ function App() {
   const [customConfig, setCustomConfig] = useState(null);
   const [mode, setMode] = useState('single'); // 'single' or 'multi'
   const [currentScramble, setCurrentScramble] = useState('');
+
+  // Cooperative mode state
+  const [coopPlayers, setCoopPlayers] = useState([]); // [{ name, hp }]
+  const [coopTimes, setCoopTimes] = useState([]); // [number]
+  const [bossHP, setBossHP] = useState(MAX_HP * 2); // Boss has more HP
+  const [coopLog, setCoopLog] = useState([]);
 
   useEffect(() => {
     // Link to the original stylesheet
@@ -225,10 +232,92 @@ function App() {
 
   // -- Event Handlers --
 
-  const handleNameEntered = (name, selectedMode = 'single') => {
+  const handleNameEntered = (name, selectedMode = 'single', coopNames = []) => {
     setPlayerName(name);
     setMode(selectedMode);
-    setGameState(GAME_STATES.DIFFICULTY);
+    if (selectedMode === 'cooperative') {
+      // Go to coop setup
+      setGameState(GAME_STATES.COOP_SETUP);
+    } else {
+      setGameState(GAME_STATES.DIFFICULTY);
+    }
+  };
+
+  // Cooperative setup: start game with player names
+  const handleCoopStart = (names) => {
+    setCoopPlayers(names.map(n => ({ name: n, hp: MAX_HP })));
+    setBossHP(MAX_HP * 2);
+    setCoopLog([]);
+    setGameState(GAME_STATES.BATTLE);
+    startNewTurn();
+  };
+
+  // Cooperative turn logic
+  const processCoopTurn = (times) => {
+    if (isProcessingTurn || csvData.length === 0) return;
+    setIsProcessingTurn(true);
+    const randomRow = getRandomRow();
+    const scramble = randomRow ? randomRow.scr : 'Unknown scramble';
+    setCurrentScramble(scramble);
+    const { ENEMY_TIME_MEAN, ENEMY_TIME_STD, DAMAGE_MULTIPLIER, USE_REAL_SOLVE } = customConfig || DIFFICULTY_SETTINGS[difficulty];
+    let bossTime;
+    if (USE_REAL_SOLVE) {
+      bossTime = randomRow && randomRow.rest ? parseFloat(randomRow.rest) : normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
+    } else {
+      bossTime = normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
+    }
+    // Only consider alive players
+    const aliveIdxs = coopPlayers.map((p, i) => p.hp > 0 ? i : -1).filter(i => i !== -1);
+    const aliveTimes = aliveIdxs.map(i => times[i]);
+    // Find fastest among alive
+    const minTime = Math.min(...aliveTimes);
+    const fastestIdxs = aliveIdxs.filter(i => times[i] === minTime);
+    // Boss attacks slowest alive player
+    const maxTime = Math.max(...aliveTimes);
+    const slowestIdx = aliveIdxs.find(i => times[i] === maxTime);
+    let nextPlayers = [...coopPlayers];
+    let nextBossHP = bossHP;
+    let log = `<p>Boss time: <span class='result-value'>${bossTime.toFixed(2)}</span> sec.<br/>`;
+    times.forEach((t, i) => {
+      const eliminated = coopPlayers[i].hp <= 0;
+      log += `${coopPlayers[i].name}: <span class='result-value'>${eliminated ? 'ELIMINATED' : t.toFixed(2) + ' sec.'}</span> `;
+    });
+    log += '<br/>';
+    // Alive players faster than boss deal damage
+    fastestIdxs.forEach(idx => {
+      if (times[idx] < bossTime) {
+        const diff = bossTime - times[idx];
+        const dmg = Math.round(diff * DAMAGE_MULTIPLIER + 5);
+        nextBossHP = Math.max(0, nextBossHP - dmg);
+        log += `${coopPlayers[idx].name} hits boss for <span class='result-value'>${dmg}</span>! `;
+      }
+    });
+    // Boss attacks slowest alive player if boss is faster
+    if (bossTime < maxTime && slowestIdx !== undefined) {
+      const diff = maxTime - bossTime;
+      const dmg = Math.round(diff * DAMAGE_MULTIPLIER + 5);
+      nextPlayers[slowestIdx].hp = Math.max(0, nextPlayers[slowestIdx].hp - dmg);
+      log += `Boss hits ${coopPlayers[slowestIdx].name} for <span class='result-value'>${dmg}</span>!`;
+    } else {
+      log += 'Boss was not faster than any player.';
+    }
+    log += '</p>';
+    setCoopLog(prev => [...prev, log]);
+    setCoopPlayers(nextPlayers);
+    setBossHP(nextBossHP);
+    // Check for win/lose
+    if (nextBossHP <= 0) {
+      setGameOverMessage('Victory! The boss is defeated!');
+      setGameState(GAME_STATES.GAME_OVER);
+      victorySoundRef.current?.play();
+    } else if (nextPlayers.every(p => p.hp <= 0)) {
+      setGameOverMessage('Game Over! All players defeated.');
+      setGameState(GAME_STATES.GAME_OVER);
+      defeatSoundRef.current?.play();
+    } else {
+      setTimeout(() => setIsProcessingTurn(false), 50);
+      startNewTurn();
+    }
   };
 
   const handleConfigStart = (config) => {
@@ -257,6 +346,88 @@ function App() {
   // -- Render Logic --
 
   const renderGameContent = () => {
+    if (mode === 'cooperative') {
+      if (gameState === GAME_STATES.COOP_SETUP) {
+        // Minimal: ask for comma-separated names
+        return (
+          <div>
+            <h2>Cooperative Mode: Enter player names (comma separated)</h2>
+            <input type="text" id="coopNamesInput" placeholder="Alice,Bob,Charlie" />
+            <button onClick={() => {
+              const val = document.getElementById('coopNamesInput').value;
+              const names = val.split(',').map(s => s.trim()).filter(Boolean);
+              if (names.length > 0) handleCoopStart(names);
+            }}>Start Coop Battle</button>
+          </div>
+        );
+      }
+      if (gameState === GAME_STATES.BATTLE) {
+        // Improved: show HP bars, scramble, and a table for times/HP
+        return (
+          <div className="coop-battle-container">
+            <h2>Cooperative Boss Battle</h2>
+            <div className="coop-boss-section">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <img src="/flc.png" alt="Boss" style={{ width: 64, height: 64, borderRadius: 8 }} />
+                <div>
+                  <div><b>Boss HP:</b> {bossHP} / {MAX_HP * 2}</div>
+                  <div className="hp-bar" style={{ width: 200, height: 16, background: '#eee', borderRadius: 8, overflow: 'hidden', marginTop: 4 }}>
+                    <div style={{ width: `${(bossHP / (MAX_HP * 2)) * 100}%`, height: '100%', background: '#e74c3c', transition: 'width 0.3s' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="coop-scramble" style={{ margin: '18px 0', fontSize: 18 }}>
+              <b>Scramble:</b> <span className="scramble">{currentScramble}</span>
+            </div>
+            <form onSubmit={e => {
+              e.preventDefault();
+              const times = coopPlayers.map((p, i) => {
+                if (p.hp <= 0) return 9999; // eliminated players get dummy high time
+                const v = document.getElementById('coopTime' + i).value;
+                return parseFloat(v);
+              });
+              if (coopPlayers.every((p, i) => p.hp <= 0 || (!isNaN(times[i]) && times[i] > 0))) processCoopTurn(times);
+            }}>
+              <table className="coop-table" style={{ width: '100%', maxWidth: 500, margin: '0 auto 16px', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f8f8f8' }}>
+                    <th style={{ padding: 6 }}>Player</th>
+                    <th style={{ padding: 6 }}>HP</th>
+                    <th style={{ padding: 6 }}>Time (sec)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coopPlayers.map((p, i) => (
+                    <tr key={i} style={{ background: p.hp <= 0 ? '#fbeaea' : 'white' }}>
+                      <td style={{ padding: 6, fontWeight: 'bold', color: p.hp <= 0 ? '#c0392b' : undefined }}>{p.name}{p.hp <= 0 ? ' (ELIMINATED)' : ''}</td>
+                      <td style={{ padding: 6 }}>
+                        <div style={{ width: 80, height: 12, background: '#eee', borderRadius: 6, display: 'inline-block', marginRight: 6 }}>
+                          <div style={{ width: `${(p.hp / MAX_HP) * 100}%`, height: '100%', background: '#3498db', borderRadius: 6, transition: 'width 0.3s' }} />
+                        </div>
+                        {p.hp}
+                      </td>
+                      <td style={{ padding: 6 }}>
+                        <input id={'coopTime' + i} type="number" step="0.01" min="0" style={{ width: 70 }} disabled={p.hp <= 0} placeholder={p.hp <= 0 ? 'ELIM' : ''} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button type="submit" disabled={isProcessingTurn} style={{ fontWeight: 'bold', fontSize: 16, padding: '6px 18px' }}>Submit Times</button>
+            </form>
+            <div>
+              <h3>Battle Log</h3>
+              <div style={{ maxHeight: 260, overflowY: 'auto', background: '#fafbfc', border: '1px solid #eee', borderRadius: 8, padding: 10 }}>
+                {coopLog.map((entry, idx) => (
+                  <div key={idx} style={{ marginBottom: 10 }} dangerouslySetInnerHTML={{ __html: entry }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      }
+    }
     switch (gameState) {
       case GAME_STATES.NAME:
         return <StartScreen onStartBattle={handleNameEntered} />;
@@ -386,6 +557,7 @@ function App() {
           <li>You can use your helper <em>Tymon</em> (3 times per game) to substitute your time with a value between 4 and 6 sec.</li>
           <li>Each consecutive win builds a combo, adding +1 damage for each combo level (resets when you lose).</li>
           <li>The battle continues until one side's HP reaches 0.</li>
+          <li><b>Cooperative mode:</b> Multiple players fight a boss. Each turn, all players enter their times. Players faster than the boss deal damage to the boss. The boss attacks the slowest player if it is faster than them. Boss has double HP. All players lose if all reach 0 HP.</li>
         </ul>
       </div>
       <audio ref={hitSoundRef} src="/hit.wav" preload="auto"></audio>

@@ -87,21 +87,9 @@ function App() {
     setIsProcessingTurn(true);
 
     const randomRow = getRandomRow();
-    if (!randomRow || (!randomRow.rest && !isTymon) || (isTymon && !randomRow.time)) {
-      alert('Error: Missing enemy or Tymon time in CSV data.');
-      setIsProcessingTurn(false);
-      return;
-    }
-    const scramble = randomRow.scr || 'Unknown scramble';
-    const { DAMAGE_MULTIPLIER } = DIFFICULTY_SETTINGS[difficulty];
-    const enemyTime = !isTymon ? parseFloat(randomRow.rest) : null;
-    const tymonTime = isTymon ? parseFloat(randomRow.time) : null;
-    const usedTime = isTymon ? tymonTime : enemyTime;
-    if (isNaN(usedTime)) {
-      alert('Error: Invalid time value in CSV data.');
-      setIsProcessingTurn(false);
-      return;
-    }
+    const scramble = randomRow ? randomRow.scr : 'Unknown scramble';
+    const { ENEMY_TIME_MEAN, ENEMY_TIME_STD, DAMAGE_MULTIPLIER } = DIFFICULTY_SETTINGS[difficulty];
+    const enemyTime = randomRow && randomRow.rest ? parseFloat(randomRow.rest) : normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
 
     // Reset effects from previous turn
     setPlayerImpact(false);
@@ -115,16 +103,16 @@ function App() {
     } else {
       resultText += `Your time: <span class="result-value">${playerTime.toFixed(2)}</span> sec. `;
     }
-    resultText += `Enemy's time: <span class="result-value">${usedTime.toFixed(2)}</span> sec. `;
+    resultText += `Enemy's time: <span class="result-value">${enemyTime.toFixed(2)}</span> sec. `;
     resultText += `<br>Scramble: <span class="scramble">${scramble}</span>`;
 
     let nextPlayerHP = playerHP;
     let nextEnemyHP = enemyHP;
     let nextComboCount = comboCount;
     
-    if (playerTime < usedTime) {
+    if (playerTime < enemyTime) {
       // Player wins round
-      const diff = usedTime - playerTime;
+      const diff = enemyTime - playerTime;
       const baseDamage = Math.round((diff * DAMAGE_MULTIPLIER) + 5);
       nextComboCount++;
       const comboBonus = nextComboCount;
@@ -144,9 +132,9 @@ function App() {
        setEnemyImpact(true); // Trigger enemy impact animation
        setTimeout(() => setEnemyImpact(false), 500); // Remove impact class later
 
-    } else if (playerTime > usedTime) {
+    } else if (playerTime > enemyTime) {
       // Enemy wins round
-      const diff = playerTime - usedTime;
+      const diff = playerTime - enemyTime;
       const damage = Math.round((diff * DAMAGE_MULTIPLIER) + 5);
       nextPlayerHP = Math.max(0, playerHP - damage);
       nextComboCount = 0; // Reset combo

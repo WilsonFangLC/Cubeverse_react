@@ -11,6 +11,7 @@ import {
   INITIAL_TYMON_COUNT, 
   DIFFICULTY_SETTINGS 
 } from './utils/gameLogic';
+import { Line } from 'react-chartjs-2';
 
 // Define game states
 const GAME_STATES = {
@@ -617,6 +618,31 @@ function App() {
     setTimeout(() => setShowRoundBanner(false), 1200);
   }
 
+  // --- Infinite Mode: Track all times for the run ---
+  const [solveTimes, setSolveTimes] = useState([]); // Array of numbers
+  const [pbSingle, setPbSingle] = useState(null);
+  const [pbMo3, setPbMo3] = useState(null);
+  const [pbAo5, setPbAo5] = useState(null);
+  const [pbAo12, setPbAo12] = useState(null);
+
+  // --- Helper functions for mo3, ao5, ao12 ---
+  function mean(arr) {
+    if (arr.length === 0) return null;
+    return arr.reduce((a, b) => a + b, 0) / arr.length;
+  }
+  function ao(arr, n) {
+    if (arr.length < n) return null;
+    const lastN = arr.slice(-n);
+    // Remove best and worst for ao5/ao12
+    if (n >= 5) {
+      const sorted = [...lastN].sort((a, b) => a - b);
+      sorted.shift(); // remove best
+      sorted.pop(); // remove worst
+      return mean(sorted);
+    }
+    return mean(lastN);
+  }
+
   // Infinite: process a round
   function processInfiniteTurn(playerTime) {
     if (!infiniteAI) return;
@@ -813,6 +839,26 @@ function App() {
       setShowAchievement(ACHIEVEMENTS[2].label);
     }
     if (showAchievement) setTimeout(() => setShowAchievement(null), 1800);
+
+    // Add time to solveTimes
+    setSolveTimes(prev => {
+      const newTimes = [...prev, playerTime];
+      // Compute PBs
+      const mo3 = mean(newTimes.slice(-3));
+      const ao5 = ao(newTimes, 5);
+      const ao12 = ao(newTimes, 12);
+      let extraDmg = 0;
+      let newPb = false;
+      if (!pbSingle || playerTime < pbSingle) { setPbSingle(playerTime); extraDmg += 3; newPb = true; }
+      if (mo3 && (!pbMo3 || mo3 < pbMo3)) { setPbMo3(mo3); extraDmg += 3; newPb = true; }
+      if (ao5 && (!pbAo5 || ao5 < pbAo5)) { setPbAo5(ao5); extraDmg += 3; newPb = true; }
+      if (ao12 && (!pbAo12 || ao12 < pbAo12)) { setPbAo12(ao12); extraDmg += 3; newPb = true; }
+      if (extraDmg > 0) {
+        damage += extraDmg;
+        log += `<span style='color:#e67e22'><b>PB Bonus: +${extraDmg} damage for new PB(s)!</b></span><br/>`;
+      }
+      return newTimes;
+    });
   }
 
   // -- Render Logic --
@@ -978,6 +1024,11 @@ function App() {
               powerupHistory={powerupHistory}
               nextQuirk={nextQuirk}
               scrambleQuality={scrambleQuality}
+              solveTimes={solveTimes}
+              pbSingle={pbSingle}
+              pbMo3={pbMo3}
+              pbAo5={pbAo5}
+              pbAo12={pbAo12}
             />
           </>
         );

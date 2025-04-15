@@ -14,18 +14,12 @@ export const INITIAL_TYMON_COUNT = 3;
 // Add difficulty-based parameters
 export const DIFFICULTY_SETTINGS = {
   Easy: {
-    ENEMY_TIME_MEAN: 13.0,
-    ENEMY_TIME_STD: 1.5,
-    DAMAGE_MULTIPLIER: 4,
+    DAMAGE_MULTIPLIER: 5,
   },
   Medium: {
-    ENEMY_TIME_MEAN: 11.62,
-    ENEMY_TIME_STD: 1.1,
     DAMAGE_MULTIPLIER: 5,
   },
   Hard: {
-    ENEMY_TIME_MEAN: 10.0,
-    ENEMY_TIME_STD: 0.8,
-    DAMAGE_MULTIPLIER: 6,
+    DAMAGE_MULTIPLIER: 5,
   },
 };

@@ -58,6 +58,8 @@ function App() {
   const [coopTimes, setCoopTimes] = useState([]); // [number]
   const [bossHP, setBossHP] = useState(MAX_HP * 2); // Boss has more HP
   const [coopLog, setCoopLog] = useState([]);
+  // Coop task system
+  const [coopTask, setCoopTask] = useState(null); // { type, target }
 
   useEffect(() => {
     // Link to the original stylesheet
@@ -230,6 +232,22 @@ function App() {
     }
   };
 
+  // Helper to generate a random coop task
+  const generateCoopTask = (players) => {
+    // Randomly pick a task type
+    const taskTypes = ['average', 'identical'];
+    const type = taskTypes[Math.floor(Math.random() * taskTypes.length)];
+    if (type === 'average') {
+      // Target average between 10 and 15, rounded to 1 decimal
+      const target = (Math.random() * 5 + 10).toFixed(1);
+      return { type, target: parseFloat(target) };
+    } else {
+      // Identical integer time between 10 and 15
+      const target = Math.floor(Math.random() * 6 + 10);
+      return { type, target };
+    }
+  };
+
   // -- Event Handlers --
 
   const handleNameEntered = (name, selectedMode = 'single', coopNames = []) => {
@@ -246,8 +264,9 @@ function App() {
   // Cooperative setup: start game with player names
   const handleCoopStart = (names) => {
     setCoopPlayers(names.map(n => ({ name: n, hp: MAX_HP })));
-    setBossHP(MAX_HP * 2);
+    setBossHP(MAX_HP * names.length); // Boss HP scales with player count
     setCoopLog([]);
+    setCoopTask(generateCoopTask(names));
     setGameState(GAME_STATES.BATTLE);
     startNewTurn();
   };
@@ -284,20 +303,40 @@ function App() {
     });
     log += '<br/>';
     // Alive players faster than boss deal damage
-    fastestIdxs.forEach(idx => {
+    aliveIdxs.forEach(idx => {
       if (times[idx] < bossTime) {
         const diff = bossTime - times[idx];
         const dmg = Math.round(diff * DAMAGE_MULTIPLIER + 5);
         nextBossHP = Math.max(0, nextBossHP - dmg);
         log += `${coopPlayers[idx].name} hits boss for <span class='result-value'>${dmg}</span>! `;
+        hitSoundRef.current?.play(); // Play hit sound when boss is hit
       }
     });
+    // Coop task check
+    let taskAchieved = false;
+    if (coopTask) {
+      if (coopTask.type === 'average') {
+        // Only alive players
+        const avg = aliveTimes.reduce((a, b) => a + b, 0) / aliveTimes.length;
+        if (Math.abs(avg - coopTask.target) <= 0.3) taskAchieved = true;
+      } else if (coopTask.type === 'identical') {
+        // All alive times are the same integer and match target (±0.5)
+        if (aliveTimes.every(t => Math.abs(t - coopTask.target) <= 0.5)) taskAchieved = true;
+      }
+      if (taskAchieved) {
+        nextBossHP = Math.max(0, nextBossHP - 5);
+        log += `<br/><span style='color:green;font-weight:bold'>Task achieved! Bonus 5 damage to boss!</span> `;
+      } else {
+        log += `<br/><span style='color:#888'>Task failed.</span> `;
+      }
+    }
     // Boss attacks slowest alive player if boss is faster
     if (bossTime < maxTime && slowestIdx !== undefined) {
       const diff = maxTime - bossTime;
       const dmg = Math.round(diff * DAMAGE_MULTIPLIER + 5);
       nextPlayers[slowestIdx].hp = Math.max(0, nextPlayers[slowestIdx].hp - dmg);
       log += `Boss hits ${coopPlayers[slowestIdx].name} for <span class='result-value'>${dmg}</span>!`;
+      hitSoundRef.current?.play(); // Play hit sound when boss hits a player
     } else {
       log += 'Boss was not faster than any player.';
     }
@@ -305,6 +344,8 @@ function App() {
     setCoopLog(prev => [...prev, log]);
     setCoopPlayers(nextPlayers);
     setBossHP(nextBossHP);
+    // Next task
+    setCoopTask(generateCoopTask(coopPlayers));
     // Check for win/lose
     if (nextBossHP <= 0) {
       setGameOverMessage('Victory! The boss is defeated!');
@@ -370,12 +411,20 @@ function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <img src="/flc.png" alt="Boss" style={{ width: 64, height: 64, borderRadius: 8 }} />
                 <div>
-                  <div><b>Boss HP:</b> {bossHP} / {MAX_HP * 2}</div>
+                  <div><b>Boss HP:</b> {bossHP} / {MAX_HP * coopPlayers.length}</div>
                   <div className="hp-bar" style={{ width: 200, height: 16, background: '#eee', borderRadius: 8, overflow: 'hidden', marginTop: 4 }}>
-                    <div style={{ width: `${(bossHP / (MAX_HP * 2)) * 100}%`, height: '100%', background: '#e74c3c', transition: 'width 0.3s' }} />
+                    <div style={{ width: `${(bossHP / (MAX_HP * coopPlayers.length)) * 100}%`, height: '100%', background: '#e74c3c', transition: 'width 0.3s' }} />
                   </div>
                 </div>
               </div>
+            </div>
+            <div className="coop-task" style={{margin:'10px 0',fontWeight:'bold',color:'#2c3e50'}}>
+              {coopTask && coopTask.type === 'average' && (
+                <>Task: Average your times to <span style={{color:'#16a085'}}>{coopTask.target}</span> sec (±0.3)</>
+              )}
+              {coopTask && coopTask.type === 'identical' && (
+                <>Task: All alive players enter exactly <span style={{color:'#16a085'}}>{coopTask.target}</span> sec (±0.5)</>
+              )}
             </div>
             <div className="coop-scramble" style={{ margin: '18px 0', fontSize: 18 }}>
               <b>Scramble:</b> <span className="scramble">{currentScramble}</span>
@@ -385,7 +434,8 @@ function App() {
               const times = coopPlayers.map((p, i) => {
                 if (p.hp <= 0) return 9999; // eliminated players get dummy high time
                 const v = document.getElementById('coopTime' + i).value;
-                return parseFloat(v);
+                const mod = parseFloat(document.getElementById('coopTimeMod' + i)?.value || 0);
+                return parseFloat(v) + (isNaN(mod) ? 0 : mod);
               });
               if (coopPlayers.every((p, i) => p.hp <= 0 || (!isNaN(times[i]) && times[i] > 0))) processCoopTurn(times);
             }}>
@@ -400,7 +450,22 @@ function App() {
                 <tbody>
                   {coopPlayers.map((p, i) => (
                     <tr key={i} style={{ background: p.hp <= 0 ? '#fbeaea' : 'white' }}>
-                      <td style={{ padding: 6, fontWeight: 'bold', color: p.hp <= 0 ? '#c0392b' : undefined }}>{p.name}{p.hp <= 0 ? ' (ELIMINATED)' : ''}</td>
+                      <td style={{ padding: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {/* Profile image */}
+                        <img
+                          src={
+                            i === 0 ? '/yza.png' :
+                            i === 1 ? '/smf.png' :
+                            i === 2 ? '/czy.png' :
+                            '/rob.png'
+                          }
+                          alt="Profile"
+                          style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: '1px solid #ccc', background: '#fff' }}
+                        />
+                        <span style={{ fontWeight: 'bold', color: p.hp <= 0 ? '#c0392b' : undefined }}>
+                          {p.name}{p.hp <= 0 ? ' (ELIMINATED)' : ''}
+                        </span>
+                      </td>
                       <td style={{ padding: 6 }}>
                         <div style={{ width: 80, height: 12, background: '#eee', borderRadius: 6, display: 'inline-block', marginRight: 6 }}>
                           <div style={{ width: `${(p.hp / MAX_HP) * 100}%`, height: '100%', background: '#3498db', borderRadius: 6, transition: 'width 0.3s' }} />
@@ -409,6 +474,10 @@ function App() {
                       </td>
                       <td style={{ padding: 6 }}>
                         <input id={'coopTime' + i} type="number" step="0.01" min="0" style={{ width: 70 }} disabled={p.hp <= 0} placeholder={p.hp <= 0 ? 'ELIM' : ''} />
+                        <span style={{marginLeft:8}}>
+                          <input id={'coopTimeMod' + i} type="number" step="0.01" style={{ width: 50 }} placeholder="mod" title="Optional time modifier (e.g. +2, -1)" disabled={p.hp <= 0} />
+                          <span style={{fontSize:12, color:'#888', marginLeft:2}}>(+/-)</span>
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -558,6 +627,7 @@ function App() {
           <li>Each consecutive win builds a combo, adding +1 damage for each combo level (resets when you lose).</li>
           <li>The battle continues until one side's HP reaches 0.</li>
           <li><b>Cooperative mode:</b> Multiple players fight a boss. Each turn, all players enter their times. Players faster than the boss deal damage to the boss. The boss attacks the slowest player if it is faster than them. Boss has double HP. All players lose if all reach 0 HP.</li>
+          <li><b>Note:</b> This game is optimized for players averaging 10-14 seconds. If your average is outside this range, use the optional time modifier box next to your input each turn.</li>
         </ul>
       </div>
       <audio ref={hitSoundRef} src="/hit.wav" preload="auto"></audio>

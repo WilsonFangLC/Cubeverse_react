@@ -4,6 +4,7 @@ import StartScreen from './components/StartScreen';
 import BattleScreen from './components/BattleScreen'; 
 import GameOverScreen from './components/GameOverScreen';
 import ConfigScreen from './components/ConfigScreen';
+import InfiniteBattleScreen from './components/InfiniteBattleScreen';
 import { 
   normalRandom, 
   MAX_HP, 
@@ -580,54 +581,18 @@ function App() {
       }
       if (gameState === GAME_STATES.INFINITE_BATTLE) {
         return (
-          <div>
-            <h2>Infinite Multiplayer (AI genned) - Round {infiniteRound}</h2>
-            <div style={{background:'#f8f8ff',border:'1px solid #bcd',borderRadius:8,padding:12,marginBottom:16}}>
-              <b>How to Play Infinite Mode:</b>
-              <ul style={{marginTop:6,marginBottom:6}}>
-                <li>Each round, you face a new AI opponent with a unique name, avatar, and a special <b>Quirk</b> that changes the rules for that round.</li>
-                <li>Enter your solve time (in seconds) and submit. The AI will also "solve" the scramble.</li>
-                <li>The winner is determined by the round's rules and quirks. Damage and HP are shown below.</li>
-                <li>Defeat the AI to advance to the next round. Each round gets harder!</li>
-                <li>If your HP drops to 0, the run ends. Try to get as far as you can!</li>
-                <li><b>Quirks</b> can do things like double damage, reverse win/lose, freeze AI time, and more. Read the quirk description each round!</li>
-              </ul>
-            </div>
-            {infiniteAI && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}>
-                <img src={infiniteAI.avatar} alt="AI Avatar" style={{ width: 64, height: 64, borderRadius: 8 }} />
-                <div>
-                  <b>{infiniteAI.name}</b>
-                  <div style={{ fontSize: 14, color: '#888' }}>Quirk: <b>{infiniteAI.quirk.name}</b> - {infiniteAI.quirk.desc}</div>
-                </div>
-              </div>
-            )}
-            <div style={{ margin: '10px 0', fontSize: 18 }}>
-              <b>Scramble:</b> <span className="scramble">{currentScramble}</span>
-            </div>
-            <div style={{ margin: '10px 0' }}>
-              <b>Your HP:</b> {playerHP} / {MAX_HP} &nbsp; | &nbsp; <b>{infiniteAI?.name} HP:</b> {enemyHP}
-            </div>
-            {activePowerUps.some(pu => pu.effect === 'see_ai_time') && infiniteAI && (
-              <div style={{margin:'10px 0',color:'#1a7',fontWeight:'bold'}}>AI’s time this round: {aiTime ? aiTime.toFixed(2) : '(hidden)'}</div>
-            )}
-            <form onSubmit={e => {
-              e.preventDefault();
-              const val = parseFloat(document.getElementById('infiniteTimeInput').value);
-              if (!isNaN(val) && val > 0) processInfiniteTurn(val);
-            }}>
-              <input id="infiniteTimeInput" type="number" step="0.01" min="0" placeholder="Your time (sec)" style={{ width: 120, fontSize: 16 }} />
-              <button type="submit" style={{ marginLeft: 12, fontWeight: 'bold' }}>Submit</button>
-            </form>
-            <div>
-              <h3>Log</h3>
-              <div style={{ maxHeight: 200, overflowY: 'auto', background: '#fafbfc', border: '1px solid #eee', borderRadius: 8, padding: 10 }}>
-                {infiniteLog.map((entry, idx) => (
-                  <div key={idx} style={{ marginBottom: 10 }} dangerouslySetInnerHTML={{ __html: entry }} />
-                ))}
-              </div>
-            </div>
-          </div>
+          <InfiniteBattleScreen
+            infiniteRound={infiniteRound}
+            infiniteAI={infiniteAI}
+            currentScramble={currentScramble}
+            playerHP={playerHP}
+            enemyHP={enemyHP}
+            MAX_HP={MAX_HP}
+            activePowerUps={activePowerUps}
+            processInfiniteTurn={processInfiniteTurn}
+            infiniteLog={infiniteLog}
+            showAIRealTime={activePowerUps.some(pu => pu.effect === 'see_ai_time')}
+          />
         );
       }
     }

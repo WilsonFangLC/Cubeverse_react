@@ -60,6 +60,16 @@ function StartScreen({ onStartBattle }) {
             />
             Cooperative Mode
           </label>
+          <label style={{ marginLeft: '20px' }}>
+            <input
+              type="radio"
+              name="mode"
+              value="infinite"
+              checked={mode === 'infinite'}
+              onChange={() => setMode('infinite')}
+            />
+            Infinite Multiplayer (AI genned)
+          </label>
         </div>
         <button onClick={handleStartClick}>Start Battle</button>
       </div>

@@ -18,7 +18,48 @@ const GAME_STATES = {
   BATTLE: 'BATTLE',
   GAME_OVER: 'GAME_OVER',
   COOP_SETUP: 'COOP_SETUP', // New state for coop setup
+  INFINITE_SETUP: 'INFINITE_SETUP', // New state for infinite multiplayer setup
+  INFINITE_BATTLE: 'INFINITE_BATTLE', // New state for infinite multiplayer battle
 };
+
+// --- Infinite Mode AI/Quirk Data ---
+const AI_NAMES = [
+  'CubeBot', 'Speedy', 'Twister', 'Mosaic', 'Slice', 'Ghost', 'Echo', 'Nova', 'Pixel', 'Blitz', 'Rando', 'Scrambler', 'Typhoon', 'Vortex', 'Prism', 'Shadow', 'Frost', 'Inferno', 'Bolt', 'Zenith'
+];
+const AI_AVATARS = [
+  '/flc.png', '/yza.png', '/smf.png', '/czy.png', '/rob.png', '/victory.png', '/defeat.png', '/tymon.png'
+];
+const AI_QUIRKS = [
+  { name: 'Double Damage', desc: 'All damage is doubled this round.', effect: 'double_damage' },
+  { name: 'Reverse Win/Lose', desc: 'Slower solver wins this round!', effect: 'reverse' },
+  { name: 'Time Freeze', desc: 'AI always gets the same time (12.00s).', effect: 'freeze' },
+  { name: 'Combo Breaker', desc: 'Combos reset every turn.', effect: 'combo_breaker' },
+  { name: 'Lucky Hit', desc: 'First hit this round deals +10 bonus damage.', effect: 'lucky_hit' },
+  { name: 'No Quirk', desc: 'No special effect this round.', effect: 'none' }
+];
+
+function getRandomAI() {
+  const name = AI_NAMES[Math.floor(Math.random() * AI_NAMES.length)];
+  const avatar = AI_AVATARS[Math.floor(Math.random() * AI_AVATARS.length)];
+  const quirk = AI_QUIRKS[Math.floor(Math.random() * AI_QUIRKS.length)];
+  return { name, avatar, quirk };
+}
+
+// --- Infinite Mode Power-Ups ---
+const POWER_UPS = [
+  { name: 'Heal 20 HP', desc: 'Restore 20 HP (cannot exceed max).', effect: 'heal_20' },
+  { name: 'Halve Next Damage', desc: 'Next round: all damage (to you) is halved.', effect: 'halve_next_damage' },
+  { name: 'See AI Time', desc: 'Next round: see AI’s time before submitting.', effect: 'see_ai_time' },
+  { name: '+1 Combo Bonus', desc: 'Permanently gain +1 combo bonus.', effect: 'perm_combo' },
+  { name: 'Shield', desc: 'Block all damage next round.', effect: 'shield' },
+  { name: 'Deal +10 Next Hit', desc: 'Next time you deal damage, add +10.', effect: 'plus10_next' },
+];
+
+function getRandomPowerUps(n = 3) {
+  // Pick n unique random power-ups
+  const shuffled = POWER_UPS.sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, n);
+}
 
 function App() {
   // State Variables
@@ -60,6 +101,19 @@ function App() {
   const [coopLog, setCoopLog] = useState([]);
   // Coop task system
   const [coopTask, setCoopTask] = useState(null); // { type, target }
+
+  // Infinite multiplayer mode state
+  const [infinitePlayers, setInfinitePlayers] = useState([]); // For infinite mode
+  const [infiniteRound, setInfiniteRound] = useState(1); // Track round number
+  const [infiniteLog, setInfiniteLog] = useState([]); // Log for infinite mode
+  const [infiniteAI, setInfiniteAI] = useState(null); // { name, avatar, quirk }
+  const [infiniteQuirkUsed, setInfiniteQuirkUsed] = useState(false); // for quirks like Lucky Hit
+
+  // Infinite mode state additions
+  const [pendingPowerUps, setPendingPowerUps] = useState([]); // Power-ups to choose from
+  const [activePowerUps, setActivePowerUps] = useState([]); // Power-ups in effect
+  const [permComboBonus, setPermComboBonus] = useState(0); // Permanent combo bonus
+  const [showPowerUpChoice, setShowPowerUpChoice] = useState(false);
 
   useEffect(() => {
     // Link to the original stylesheet
@@ -254,8 +308,10 @@ function App() {
     setPlayerName(name);
     setMode(selectedMode);
     if (selectedMode === 'cooperative') {
-      // Go to coop setup
       setGameState(GAME_STATES.COOP_SETUP);
+    } else if (selectedMode === 'infinite') {
+      setGameState(GAME_STATES.INFINITE_SETUP);
+      setTimeout(() => startInfiniteRound(), 0);
     } else {
       setGameState(GAME_STATES.DIFFICULTY);
     }
@@ -384,9 +440,197 @@ function App() {
     window.location.reload();
   };
 
+  // Infinite: start new round
+  function startInfiniteRound() {
+    setInfiniteAI(getRandomAI());
+    setInfiniteQuirkUsed(false);
+    setCurrentScramble(getRandomRow()?.scr || 'Unknown scramble');
+  }
+
+  // Infinite: process a round
+  function processInfiniteTurn(playerTime) {
+    if (!infiniteAI) return;
+    const ai = infiniteAI;
+    let aiTime;
+    if (ai.quirk.effect === 'freeze') {
+      aiTime = 12.00;
+    } else {
+      aiTime = normalRandom(12 + infiniteRound, 1.2 + 0.1 * infiniteRound); // gets harder
+    }
+    let log = `<p><b>Round ${infiniteRound}</b><br/>`;
+    log += `Your time: <span class='result-value'>${playerTime.toFixed(2)}</span> sec<br/>`;
+    log += `${ai.name}'s time: <span class='result-value'>${aiTime.toFixed(2)}</span> sec<br/>`;
+    log += `<b>Quirk:</b> ${ai.quirk.name} - ${ai.quirk.desc}<br/>`;
+    if (activePowerUps.length > 0) {
+      log += `<b>Your Power-Ups:</b> ${activePowerUps.map(pu => pu.name).join(', ')}<br/>`;
+    }
+    let playerWins = playerTime < aiTime;
+    let damage = Math.round(Math.abs(playerTime - aiTime) * 5 + 5);
+    if (permComboBonus) {
+      damage += permComboBonus;
+      log += `Permanent combo bonus: +${permComboBonus} damage<br/>`;
+    }
+    if (activePowerUps.some(pu => pu.effect === 'halve_next_damage') && !playerWins) {
+      log += `Halve Next Damage active: Damage to you is halved this round.<br/>`;
+      damage = Math.ceil(damage / 2);
+    }
+    if (activePowerUps.some(pu => pu.effect === 'plus10_next') && playerWins) {
+      log += `Deal +10 Next Hit active: +10 damage to AI this round.<br/>`;
+      damage += 10;
+    }
+    if (activePowerUps.some(pu => pu.effect === 'shield') && !playerWins) {
+      log += `Shield active: You block all damage this round!<br/>`;
+      damage = 0;
+    }
+    if (ai.quirk.effect === 'double_damage') {
+      log += `Quirk effect: All damage is doubled!<br/>`;
+      damage *= 2;
+    }
+    if (ai.quirk.effect === 'reverse') {
+      log += `Quirk effect: Slower solver wins this round!<br/>`;
+      playerWins = !playerWins;
+    }
+    if (ai.quirk.effect === 'combo_breaker') {
+      log += `Quirk effect: Combos reset this round.<br/>`;
+      setComboCount(0);
+    }
+    if (ai.quirk.effect === 'lucky_hit' && !infiniteQuirkUsed) {
+      log += `Quirk effect: First hit this round deals +10 bonus damage!<br/>`;
+      damage += 10;
+      setInfiniteQuirkUsed(true);
+    }
+    let nextPlayerHP = playerHP;
+    let nextAIHP = enemyHP;
+    if (playerWins) {
+      nextAIHP = Math.max(0, enemyHP - damage);
+      log += `<span style='color:green'><b>You win!</b> ${ai.name} loses <b>${damage}</b> HP.</span><br/>`;
+    } else {
+      nextPlayerHP = Math.max(0, playerHP - damage);
+      log += `<span style='color:red'><b>You lose!</b> You take <b>${damage}</b> HP damage.</span><br/>`;
+    }
+    log += `<b>Your HP:</b> ${nextPlayerHP} / ${MAX_HP} | <b>${ai.name} HP:</b> ${nextAIHP}<br/>`;
+    log += `</p>`;
+    setPlayerHP(nextPlayerHP);
+    setEnemyHP(nextAIHP);
+    setInfiniteLog(prev => [...prev, log]);
+    if (nextPlayerHP <= 0) {
+      setGameOverMessage('Game Over! You were defeated by ' + ai.name + '.');
+      setGameState(GAME_STATES.GAME_OVER);
+      defeatSoundRef.current?.play();
+    } else if (nextAIHP <= 0) {
+      setInfiniteRound(r => r + 1);
+      setEnemyHP(MAX_HP + 5 * infiniteRound); // AI gets more HP each round
+      // Every 2 rounds, offer power-up
+      if ((infiniteRound + 1) % 2 === 0) {
+        setPendingPowerUps(getRandomPowerUps());
+        setShowPowerUpChoice(true);
+      } else {
+        setTimeout(() => {
+          startInfiniteRound();
+          setGameState(GAME_STATES.INFINITE_BATTLE);
+        }, 1000);
+      }
+    }
+    // Remove one-time power-ups after use
+    setActivePowerUps(prev => prev.filter(pu => !['halve_next_damage','see_ai_time','shield','plus10_next'].includes(pu.effect)));
+  }
+
   // -- Render Logic --
 
   const renderGameContent = () => {
+    if (mode === 'infinite') {
+      if (showPowerUpChoice && pendingPowerUps.length > 0) {
+        return (
+          <div style={{background:'#f8fff8',border:'2px solid #6c6',borderRadius:12,padding:24,maxWidth:420,margin:'40px auto',textAlign:'center'}}>
+            <h2>Choose a Power-Up!</h2>
+            <div style={{display:'flex',gap:16,justifyContent:'center',marginTop:18}}>
+              {pendingPowerUps.map((pu, idx) => (
+                <button key={pu.name} style={{flex:1,padding:16,borderRadius:8,border:'1px solid #aaa',background:'#fff',cursor:'pointer',minWidth:100}} onClick={() => {
+                  setActivePowerUps(prev => [...prev, pu]);
+                  if (pu.effect === 'heal_20') setPlayerHP(hp => Math.min(hp + 20, MAX_HP));
+                  if (pu.effect === 'perm_combo') setPermComboBonus(b => b + 1);
+                  setShowPowerUpChoice(false);
+                  setPendingPowerUps([]);
+                  setTimeout(() => {
+                    startInfiniteRound();
+                    setGameState(GAME_STATES.INFINITE_BATTLE);
+                  }, 300);
+                }}>
+                  <b>{pu.name}</b>
+                  <div style={{fontSize:13,color:'#444',marginTop:6}}>{pu.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      if (gameState === GAME_STATES.INFINITE_SETUP) {
+        return (
+          <div>
+            <h2>Infinite Multiplayer (AI genned) - Setup</h2>
+            <p>Coming soon: Enter player names and start an endless battle against AI-generated opponents!</p>
+            <button onClick={() => {
+              setInfinitePlayers([{ name: playerName || 'Player', hp: MAX_HP }]);
+              setInfiniteRound(1);
+              setInfiniteLog([]);
+              setGameState(GAME_STATES.INFINITE_BATTLE);
+            }}>Start Infinite Battle</button>
+          </div>
+        );
+      }
+      if (gameState === GAME_STATES.INFINITE_BATTLE) {
+        return (
+          <div>
+            <h2>Infinite Multiplayer (AI genned) - Round {infiniteRound}</h2>
+            <div style={{background:'#f8f8ff',border:'1px solid #bcd',borderRadius:8,padding:12,marginBottom:16}}>
+              <b>How to Play Infinite Mode:</b>
+              <ul style={{marginTop:6,marginBottom:6}}>
+                <li>Each round, you face a new AI opponent with a unique name, avatar, and a special <b>Quirk</b> that changes the rules for that round.</li>
+                <li>Enter your solve time (in seconds) and submit. The AI will also "solve" the scramble.</li>
+                <li>The winner is determined by the round's rules and quirks. Damage and HP are shown below.</li>
+                <li>Defeat the AI to advance to the next round. Each round gets harder!</li>
+                <li>If your HP drops to 0, the run ends. Try to get as far as you can!</li>
+                <li><b>Quirks</b> can do things like double damage, reverse win/lose, freeze AI time, and more. Read the quirk description each round!</li>
+              </ul>
+            </div>
+            {infiniteAI && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}>
+                <img src={infiniteAI.avatar} alt="AI Avatar" style={{ width: 64, height: 64, borderRadius: 8 }} />
+                <div>
+                  <b>{infiniteAI.name}</b>
+                  <div style={{ fontSize: 14, color: '#888' }}>Quirk: <b>{infiniteAI.quirk.name}</b> - {infiniteAI.quirk.desc}</div>
+                </div>
+              </div>
+            )}
+            <div style={{ margin: '10px 0', fontSize: 18 }}>
+              <b>Scramble:</b> <span className="scramble">{currentScramble}</span>
+            </div>
+            <div style={{ margin: '10px 0' }}>
+              <b>Your HP:</b> {playerHP} / {MAX_HP} &nbsp; | &nbsp; <b>{infiniteAI?.name} HP:</b> {enemyHP}
+            </div>
+            {activePowerUps.some(pu => pu.effect === 'see_ai_time') && infiniteAI && (
+              <div style={{margin:'10px 0',color:'#1a7',fontWeight:'bold'}}>AI’s time this round: {aiTime ? aiTime.toFixed(2) : '(hidden)'}</div>
+            )}
+            <form onSubmit={e => {
+              e.preventDefault();
+              const val = parseFloat(document.getElementById('infiniteTimeInput').value);
+              if (!isNaN(val) && val > 0) processInfiniteTurn(val);
+            }}>
+              <input id="infiniteTimeInput" type="number" step="0.01" min="0" placeholder="Your time (sec)" style={{ width: 120, fontSize: 16 }} />
+              <button type="submit" style={{ marginLeft: 12, fontWeight: 'bold' }}>Submit</button>
+            </form>
+            <div>
+              <h3>Log</h3>
+              <div style={{ maxHeight: 200, overflowY: 'auto', background: '#fafbfc', border: '1px solid #eee', borderRadius: 8, padding: 10 }}>
+                {infiniteLog.map((entry, idx) => (
+                  <div key={idx} style={{ marginBottom: 10 }} dangerouslySetInnerHTML={{ __html: entry }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      }
+    }
     if (mode === 'cooperative') {
       if (gameState === GAME_STATES.COOP_SETUP) {
         // Minimal: ask for comma-separated names

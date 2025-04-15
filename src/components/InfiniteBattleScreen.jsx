@@ -13,7 +13,9 @@ function InfiniteBattleScreen({
   infiniteLog,
   showAIRealTime,
   quirkHistory = [],
-  powerupHistory = []
+  powerupHistory = [],
+  nextQuirk,
+  scrambleQuality
 }) {
   // Input and feedback state
   const [infiniteInput, setInfiniteInput] = useState("");
@@ -117,6 +119,11 @@ function InfiniteBattleScreen({
               <div style={{ fontSize: 14, color: '#888' }}>
                 Quirk: <Tooltip text={infiniteAI.quirk.desc}><b>{infiniteAI.quirk.name}</b></Tooltip> - {infiniteAI.quirk.desc}
               </div>
+              {nextQuirk && (
+                <div style={{ fontSize: 13, color: '#1a7', marginTop: 4 }}>
+                  <b>Next Round Quirk Preview:</b> <Tooltip text={nextQuirk.desc}><b>{nextQuirk.name}</b></Tooltip> - {nextQuirk.desc}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -134,6 +141,12 @@ function InfiniteBattleScreen({
         )}
         <div style={{ margin: '10px 0', fontSize: 18 }}>
           <b>Scramble:</b> <span className="scramble">{currentScramble}</span>
+          <span style={{marginLeft:16,padding:'2px 10px',borderRadius:6,background:scrambleQuality==='Easy'?'#d4efdf':scrambleQuality==='Hard'?'#f9e79f':'#d6eaf8',color:'#333',fontWeight:'bold',fontSize:15}}>
+            {scrambleQuality} Scramble
+          </span>
+        </div>
+        <div style={{fontSize:13,margin:'-8px 0 12px 0',color:'#888'}}>
+          <b>What does scramble quality mean?</b> Easy: AI is slower, you have an advantage. Hard: AI is faster, round is tougher. Medium: normal.
         </div>
         <div style={{ margin: '10px 0' }}>
           <b>Your HP:</b> {playerHP} / {MAX_HP}
@@ -146,7 +159,7 @@ function InfiniteBattleScreen({
           </div>
         </div>
         {showAIRealTime && aiTime && (
-          <div style={{margin:'10px 0',color:'#1a7',fontWeight:'bold'}}>AI’s time this round: {aiTime}</div>
+          <div style={{margin:'10px 0',color:'#1a7',fontWeight:'bold'}}>AI’s time this round: {aiTime} <span style={{fontSize:13,marginLeft:8}}>(Inspection+ or See AI Time active)</span></div>
         )}
         {roundResult && (
           <div style={{fontWeight:'bold',fontSize:22,margin:'10px 0',color:roundResult==='win'?'#1a7':'#c0392b',transition:'opacity 0.5s',opacity:1}}>

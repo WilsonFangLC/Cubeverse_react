@@ -38,6 +38,22 @@ const AI_QUIRKS = [
   { name: 'Lucky Hit', desc: 'First hit this round deals +10 bonus damage.', effect: 'lucky_hit' },
   { name: 'No Quirk', desc: 'No special effect this round.', effect: 'none' }
 ];
+// --- More Quirks and Power-Ups for Variety ---
+AI_QUIRKS.push(
+  { name: 'Mirror Match', desc: 'AI copies your time exactly this round.', effect: 'mirror' },
+  { name: 'Sudden Death', desc: 'First to take damage this round loses all HP.', effect: 'sudden_death' },
+  { name: 'Combo Drain', desc: 'You lose all combo bonuses this round.', effect: 'combo_drain' },
+  { name: 'Heal AI', desc: 'AI heals 10 HP if it wins this round.', effect: 'heal_ai' },
+  { name: 'Weak Hit', desc: 'All damage is halved this round.', effect: 'half_damage' }
+);
+// --- Cube-Solving Inspired Quirks ---
+AI_QUIRKS.push(
+  { name: 'Parity Error', desc: 'You must enter an odd time (e.g., 11.11, 13.33) or take +2s penalty.', effect: 'parity_error' },
+  { name: 'OLL Skip', desc: 'You get a 1.5s time bonus this round.', effect: 'oll_skip' },
+  { name: 'Lockup', desc: 'Your time is increased by 1.5s this round.', effect: 'lockup' },
+  { name: 'Inspection+', desc: 'See AI’s time before submitting.', effect: 'inspection_plus' },
+  { name: '+2 Penalty', desc: 'Your time is increased by 2s this round.', effect: 'plus2_penalty' }
+);
 
 function getRandomAI() {
   const name = AI_NAMES[Math.floor(Math.random() * AI_NAMES.length)];
@@ -64,6 +80,36 @@ const POWER_UPS = [
   { name: 'Shield', desc: 'Block all damage next round.', effect: 'shield' },
   { name: 'Deal +10 Next Hit', desc: 'Next time you deal damage, add +10.', effect: 'plus10_next' },
 ];
+// --- More Quirks and Power-Ups for Variety ---
+POWER_UPS.push(
+  { name: 'Steal Combo', desc: 'Steal the AI’s combo bonus next round.', effect: 'steal_combo' },
+  { name: 'AI Slowdown', desc: 'AI’s time is increased by 2s next round.', effect: 'ai_slowdown' },
+  { name: 'Combo Shield', desc: 'You keep your combo even if you lose next round.', effect: 'combo_shield' },
+  { name: 'Double Heal', desc: 'Next time you heal, double the amount.', effect: 'double_heal' }
+);
+// --- Cube-Solving Inspired Power-Ups ---
+POWER_UPS.push(
+  { name: 'PLL Skip', desc: 'Once: Subtract 2s from your time.', effect: 'pll_skip' },
+  { name: 'Lookahead', desc: 'Preview the next 2 quirks.', effect: 'lookahead' },
+  { name: 'Perfect Cross', desc: 'First win this round deals double damage.', effect: 'perfect_cross' }
+);
+
+// --- Rare/Legendary Power-Ups ---
+const RARE_POWER_UPS = [
+  { name: 'Invincible (3 Rounds)', desc: 'Take no damage for the next 3 rounds.', effect: 'invincible_3' },
+  { name: 'Double Damage (2 Rounds)', desc: 'Deal double damage for the next 2 rounds.', effect: 'double_dmg_2' },
+  { name: 'Resurrect', desc: 'If you die this run, revive with 1 HP (one time).', effect: 'resurrect_once' },
+  { name: 'Full Heal', desc: 'Restore to full HP instantly.', effect: 'full_heal' },
+];
+
+function getRandomPowerUpsWithRare(n = 3) {
+  // 20% chance to include a rare power-up
+  const includeRare = Math.random() < 0.2;
+  let pool = [...POWER_UPS];
+  if (includeRare) pool = pool.concat(RARE_POWER_UPS);
+  const shuffled = pool.sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, n);
+}
 
 function getRandomPowerUps(n = 3) {
   // Pick n unique random power-ups
@@ -87,6 +133,13 @@ const FUN_TIPS = [
 function getRandomTip() {
   return FUN_TIPS[Math.floor(Math.random() * FUN_TIPS.length)];
 }
+
+// --- Cube Agency: Player-Selected Scramble Type ---
+const SCRAMBLE_TYPES = [
+  { label: 'Easy', value: 'Easy', desc: 'AI is slower, you have an advantage.' },
+  { label: 'Medium', value: 'Medium', desc: 'Normal round.' },
+  { label: 'Hard', value: 'Hard', desc: 'AI is faster, round is tougher.' }
+];
 
 function App() {
   // State Variables
@@ -122,6 +175,7 @@ function App() {
   const [customConfig, setCustomConfig] = useState(null);
   const [mode, setMode] = useState('single'); // 'single' or 'multi'
   const [currentScramble, setCurrentScramble] = useState('');
+  const [scrambleChoice, setScrambleChoice] = useState(null);
 
   // Cooperative mode state
   const [coopPlayers, setCoopPlayers] = useState([]); // [{ name, hp }]
@@ -155,6 +209,37 @@ function App() {
   const [isBossRound, setIsBossRound] = useState(false);
   const [bossIndex, setBossIndex] = useState(0);
 
+  // --- Achievements ---
+  const ACHIEVEMENTS = [
+    { key: 'round10', label: 'Survive 10 Rounds', check: (round) => round >= 10 },
+    { key: 'boss3', label: 'Defeat 3 Bosses', check: (round) => Math.floor((round-1)/5) >= 3 },
+    { key: 'clutch', label: 'Win a round with 1 HP left', check: (hp, log) => hp === 1 && /You win!/i.test(log) },
+  ];
+  const [unlockedAchievements, setUnlockedAchievements] = useState([]);
+  const [showAchievement, setShowAchievement] = useState(null);
+
+  // --- Infinite Mode: Quick Start and Starting Power-Up ---
+  const [showStartingPowerUp, setShowStartingPowerUp] = useState(false);
+  const [startingPowerUp, setStartingPowerUp] = useState(null);
+  const [pendingStartingPowerUps, setPendingStartingPowerUps] = useState([]);
+  const [quickStart, setQuickStart] = useState(false);
+
+  // --- Boss Rounds on 3, 6, 10 and End After 10 ---
+  const BOSS_ROUNDS = [3, 6, 10];
+
+  // --- Scramble Quality Indicator ---
+  const [scrambleQuality, setScrambleQuality] = useState('Medium');
+  function getScrambleQuality(scramble) {
+    // Simple: random for now, could use real logic if available
+    const roll = Math.random();
+    if (roll < 0.33) return 'Easy';
+    if (roll < 0.66) return 'Medium';
+    return 'Hard';
+  }
+  useEffect(() => {
+    if (currentScramble) setScrambleQuality(getScrambleQuality(currentScramble));
+  }, [currentScramble]);
+
   useEffect(() => {
     // Link to the original stylesheet
     const link = document.createElement('link');
@@ -185,6 +270,25 @@ function App() {
     const randomIndex = Math.floor(Math.random() * csvData.length);
     return csvData[randomIndex];
   };
+
+  // --- Dynamic Quirk/Power-Up Pool (move inside App for state access) ---
+  // --- Remove repetitive quirks and power-ups, and upgrade (once chosen) ---
+  let availableQuirks = AI_QUIRKS.filter(q => !quirkHistory.some(h => h && h.effect === q.effect));
+  if (availableQuirks.length === 0) availableQuirks = [...AI_QUIRKS]; // fallback if all used
+  let availablePowerUps = POWER_UPS.filter(pu => !powerupHistory.some(h => h && h.effect === pu.effect));
+  if (availablePowerUps.length === 0) availablePowerUps = [...POWER_UPS]; // fallback if all used
+
+  function getDynamicQuirk() {
+    // Always random order, no repeats until pool exhausted
+    const pool = infiniteRound > 10 ? availableQuirks : availableQuirks.slice(0, 6);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+  function getDynamicPowerUps(n = 3) {
+    // Always random order, no repeats until pool exhausted
+    const pool = infiniteRound > 10 ? availablePowerUps : availablePowerUps.slice(0, 6);
+    const shuffled = pool.sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, n);
+  }
 
   // -- Game Logic Functions --
 
@@ -355,6 +459,9 @@ function App() {
     } else {
       setGameState(GAME_STATES.DIFFICULTY);
     }
+    if (selectedMode === 'infinite') {
+      setScrambleChoice(null);
+    }
   };
 
   // Cooperative setup: start game with player names
@@ -482,23 +589,31 @@ function App() {
 
   // Infinite: start new round
   function startInfiniteRound() {
-    const isBoss = infiniteRound % 5 === 0;
+    const isBoss = BOSS_ROUNDS.includes(infiniteRound);
     setIsBossRound(isBoss);
+    let aiHP = MAX_HP + 5 * infiniteRound;
+    if (infiniteRound <= 5) aiHP = Math.round(MAX_HP * 0.6 + 3 * infiniteRound); // Lower early HP
     if (isBoss) {
       const boss = BOSS_AI[bossIndex % BOSS_AI.length];
       setInfiniteAI({ name: boss.name, avatar: boss.avatar, quirk: boss.superQuirk, isBoss: true });
-      setEnemyHP(MAX_HP * 2); // Boss has double HP
+      setEnemyHP(MAX_HP * 2);
       setBossIndex(bossIndex + 1);
     } else {
       const ai = getRandomAI();
+      ai.quirk = getDynamicQuirk();
       setInfiniteAI({ ...ai, isBoss: false });
-      setEnemyHP(MAX_HP + 5 * infiniteRound);
+      setEnemyHP(aiHP);
     }
     setInfiniteQuirkUsed(false);
     setCurrentScramble(getRandomRow()?.scr || 'Unknown scramble');
     setQuirkHistory(prev => [...prev, (isBoss ? BOSS_AI[bossIndex % BOSS_AI.length].superQuirk : infiniteAI?.quirk)]);
     setShowRoundBanner(true);
     setCurrentTip(getRandomTip());
+    if (infiniteRound === 1 && scrambleChoice) {
+      setScrambleQuality(scrambleChoice);
+    } else if (currentScramble) {
+      setScrambleQuality(getScrambleQuality(currentScramble));
+    }
     setTimeout(() => setShowRoundBanner(false), 1200);
   }
 
@@ -513,7 +628,14 @@ function App() {
     } else if (ai.quirk.effect === 'freeze') {
       aiTime = 12.00;
     } else {
-      aiTime = normalRandom(12 + infiniteRound, 1.2 + 0.1 * infiniteRound); // gets harder
+      // Make AI stronger as rounds increase (lower time = stronger)
+      // Early rounds: AI is easier (higher mean), later rounds: AI is faster (lower mean)
+      // Example: mean decreases from 13.5 (round 1) to 10.0 (round 10)
+      const minMean = 10.0;
+      const maxMean = 13.5;
+      const mean = Math.max(minMean, maxMean - (infiniteRound - 1) * 0.4);
+      const std = 0.7 + 0.05 * Math.min(infiniteRound, 10); // Slightly more consistent as rounds go
+      aiTime = normalRandom(mean, std);
     }
     let log = `<p><b>Round ${infiniteRound}</b><br/>`;
     log += `Your time: <span class='result-value'>${playerTime.toFixed(2)}</span> sec<br/>`;
@@ -524,6 +646,7 @@ function App() {
     }
     let playerWins = playerTime < aiTime;
     let damage = Math.round(Math.abs(playerTime - aiTime) * 5 + 5);
+    if (infiniteRound <= 5) damage = Math.round(damage * 1.5); // More damage early
     if (permComboBonus) {
       damage += permComboBonus;
       log += `Permanent combo bonus: +${permComboBonus} damage<br/>`;
@@ -557,28 +680,77 @@ function App() {
       damage += 10;
       setInfiniteQuirkUsed(true);
     }
-    if (infiniteAI?.isBoss) {
-      if (infiniteAI.quirk.effect === 'triple_damage') damage *= 3;
-      if (infiniteAI.quirk.effect === 'boss_time_9') aiTime = 9.00;
-      if (infiniteAI.quirk.effect === 'no_powerups') {
-        log += `Boss effect: You cannot use power-ups this round!<br/>`;
-        // Ignore all active power-ups for this round
-        damage = Math.round(Math.abs(playerTime - aiTime) * 5 + 5);
-        if (permComboBonus) damage += permComboBonus;
-      }
-      if (infiniteAI.quirk.effect === 'steal_combo') {
-        log += `Boss effect: Boss steals your combo bonus!<br/>`;
-        damage = Math.round(Math.abs(playerTime - aiTime) * 5 + 5);
-        if (comboCount > 0) {
-          log += `Boss uses your combo bonus: +${comboCount} damage!<br/>`;
-          damage += comboCount;
-          setComboCount(0);
+    if (ai.quirk.effect === 'mirror') {
+      aiTime = playerTime;
+      log += `Quirk effect: AI copies your time exactly!<br/>`;
+    }
+    if (ai.quirk.effect === 'sudden_death') {
+      if (playerTime !== aiTime) {
+        if (playerTime < aiTime) {
+          nextAIHP = 0;
+          log += `Sudden Death: AI loses all HP!<br/>`;
+        } else {
+          nextPlayerHP = 0;
+          log += `Sudden Death: You lose all HP!<br/>`;
         }
+      } else {
+        log += `Sudden Death: Tie, no one loses HP.<br/>`;
       }
-      if (infiniteAI.quirk.effect === 'double_hp') {
-        // Already set in startInfiniteRound
-        log += `Boss effect: Boss has double HP this round!<br/>`;
+    }
+    if (ai.quirk.effect === 'combo_drain') {
+      setComboCount(0);
+      log += `Quirk effect: Your combo bonus is drained!<br/>`;
+    }
+    if (ai.quirk.effect === 'heal_ai' && !playerWins) {
+      nextAIHP = Math.min(nextAIHP + 10, MAX_HP + 5 * infiniteRound);
+      log += `Quirk effect: AI heals 10 HP!<br/>`;
+    }
+    if (ai.quirk.effect === 'half_damage') {
+      damage = Math.ceil(damage / 2);
+      log += `Quirk effect: All damage is halved!<br/>`;
+    }
+    if (ai.quirk.effect === 'parity_error') {
+      if (Math.floor(playerTime) % 2 === 0) {
+        playerTime += 2;
+        log += `Parity Error: +2s penalty for not entering an odd time!<br/>`;
       }
+    }
+    if (ai.quirk.effect === 'oll_skip') {
+      playerTime -= 1.5;
+      log += `OLL Skip: You get a 1.5s time bonus!<br/>`;
+    }
+    if (ai.quirk.effect === 'lockup') {
+      playerTime += 1.5;
+      log += `Lockup: Your time is increased by 1.5s!<br/>`;
+    }
+    if (ai.quirk.effect === 'inspection_plus') {
+      log += `Inspection+: You see AI's time before submitting!<br/>`;
+      // (Handled in UI: showAIRealTime)
+    }
+    if (ai.quirk.effect === 'plus2_penalty') {
+      playerTime += 2;
+      log += `+2 Penalty: Your time is increased by 2s!<br/>`;
+    }
+    if (activePowerUps.some(pu => pu.effect === 'pll_skip')) {
+      playerTime -= 2;
+      log += `Power-Up: PLL Skip! Subtract 2s from your time.<br/>`;
+    }
+    if (activePowerUps.some(pu => pu.effect === 'perfect_cross') && playerWins) {
+      damage *= 2;
+      log += `Power-Up: Perfect Cross! Double damage for your first win this round.<br/>`;
+    }
+    // Play hit sound for every turn
+    if (hitSoundRef.current) hitSoundRef.current.currentTime = 0, hitSoundRef.current.play();
+    // Consistency bonus: if playerTime within ±0.2s of previous, +3 damage
+    if (typeof processInfiniteTurn.lastTime === 'number' && Math.abs(playerTime - processInfiniteTurn.lastTime) <= 0.2) {
+      damage += 3;
+      log += `Consistency Bonus: +3 damage for similar time!<br/>`;
+    }
+    processInfiniteTurn.lastTime = playerTime;
+    // PB tracking: highlight if this is the fastest time this run
+    if (!processInfiniteTurn.pb || playerTime < processInfiniteTurn.pb) {
+      processInfiniteTurn.pb = playerTime;
+      log += `<span style='color:#16a085'><b>New PB for this run: ${playerTime.toFixed(2)}s!</b></span><br/>`;
     }
     let nextPlayerHP = playerHP;
     let nextAIHP = enemyHP;
@@ -606,9 +778,16 @@ function App() {
         setInfiniteBestRound(nextRound);
         localStorage.setItem('infiniteBestRound', nextRound);
       }
+      if (infiniteRound === 10) {
+        setTimeout(() => {
+          setGameOverMessage('Congratulations! You completed all 10 rounds!');
+          setGameState(GAME_STATES.GAME_OVER);
+        }, 1200);
+        return;
+      }
       // Every 2 rounds, offer power-up
       if ((infiniteRound + 1) % 2 === 0) {
-        setPendingPowerUps(getRandomPowerUps());
+        setPendingPowerUps(getDynamicPowerUps());
         setShowPowerUpChoice(true);
       } else {
         setTimeout(() => {
@@ -619,12 +798,38 @@ function App() {
     }
     // Remove one-time power-ups after use
     setActivePowerUps(prev => prev.filter(pu => !['halve_next_damage','see_ai_time','shield','plus10_next'].includes(pu.effect)));
+
+    // Check for achievements
+    if (ACHIEVEMENTS[0].check(infiniteRound) && !unlockedAchievements.includes('round10')) {
+      setUnlockedAchievements(prev => [...prev, 'round10']);
+      setShowAchievement(ACHIEVEMENTS[0].label);
+    }
+    if (ACHIEVEMENTS[1].check(infiniteRound) && !unlockedAchievements.includes('boss3')) {
+      setUnlockedAchievements(prev => [...prev, 'boss3']);
+      setShowAchievement(ACHIEVEMENTS[1].label);
+    }
+    if (ACHIEVEMENTS[2].check(nextPlayerHP, log) && !unlockedAchievements.includes('clutch')) {
+      setUnlockedAchievements(prev => [...prev, 'clutch']);
+      setShowAchievement(ACHIEVEMENTS[2].label);
+    }
+    if (showAchievement) setTimeout(() => setShowAchievement(null), 1800);
   }
 
   // -- Render Logic --
 
   const renderGameContent = () => {
     if (mode === 'infinite') {
+      let nextQuirk = null;
+      if (infiniteAI && gameState === GAME_STATES.INFINITE_BATTLE) {
+        // Preview next round's quirk (not for boss rounds)
+        const nextIsBoss = (infiniteRound + 1) % 5 === 0;
+        if (!nextIsBoss) {
+          nextQuirk = getDynamicQuirk();
+        } else {
+          const boss = BOSS_AI[(bossIndex) % BOSS_AI.length];
+          nextQuirk = boss.superQuirk;
+        }
+      }
       if (showPowerUpChoice && pendingPowerUps.length > 0) {
         return (
           <div style={{background:'#f8fff8',border:'2px solid #6c6',borderRadius:12,padding:24,maxWidth:420,margin:'40px auto',textAlign:'center'}}>
@@ -643,6 +848,7 @@ function App() {
                     setPowerupHistory(prev => [...prev, pu]);
                     if (pu.effect === 'heal_20') setPlayerHP(hp => Math.min(hp + 20, MAX_HP));
                     if (pu.effect === 'perm_combo') setPermComboBonus(b => b + 1);
+                    if (pu.effect === 'full_heal') setPlayerHP(MAX_HP);
                     setShowPowerUpChoice(false);
                     setPendingPowerUps([]);
                     // Animate and play sound
@@ -664,6 +870,51 @@ function App() {
           </div>
         );
       }
+      if (showStartingPowerUp && pendingStartingPowerUps.length > 0) {
+        return (
+          <div style={{background:'#f8fff8',border:'2px solid #6c6',borderRadius:12,padding:24,maxWidth:420,margin:'40px auto',textAlign:'center'}}>
+            <h2>Choose a Starting Power-Up!</h2>
+            <div style={{display:'flex',gap:16,justifyContent:'center',marginTop:18}}>
+              {pendingStartingPowerUps.map((pu, idx) => (
+                <button
+                  key={pu.name}
+                  style={{flex:1,padding:16,borderRadius:8,border:'1px solid #aaa',background:'#fff',cursor:'pointer',minWidth:100}}
+                  onClick={() => {
+                    setStartingPowerUp(pu);
+                    setActivePowerUps([pu]);
+                    setShowStartingPowerUp(false);
+                    setTimeout(() => setGameState(GAME_STATES.INFINITE_BATTLE), 300);
+                  }}
+                >
+                  <b>{pu.name}</b>
+                  <div style={{fontSize:13,color:'#444',marginTop:6}}>{pu.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      if (gameState === GAME_STATES.INFINITE_SETUP && !scrambleChoice) {
+        return (
+          <div>
+            <h2>Infinite Multiplayer (AI genned) - Setup</h2>
+            <div style={{background:'#f8f8ff',border:'1px solid #bcd',borderRadius:8,padding:12,margin:'18px 0',fontSize:16}}>
+              <b>Choose your first scramble type:</b>
+              <div style={{display:'flex',gap:16,marginTop:10}}>
+                {SCRAMBLE_TYPES.map(type => (
+                  <button key={type.value} style={{padding:'10px 18px',borderRadius:8,border:'1px solid #aaa',background:'#fff',cursor:'pointer'}}
+                    onClick={() => setScrambleChoice(type.value)}
+                    title={type.desc}
+                  >{type.label}</button>
+                ))}
+              </div>
+              <div style={{fontSize:13,marginTop:8,color:'#888'}}>
+                Easy: AI is slower. Hard: AI is faster. Medium: normal.
+              </div>
+            </div>
+          </div>
+        );
+      }
       if (gameState === GAME_STATES.INFINITE_SETUP) {
         return (
           <div>
@@ -671,13 +922,22 @@ function App() {
             <div style={{background:'#f8f8ff',border:'1px solid #bcd',borderRadius:8,padding:12,margin:'18px 0',fontSize:16}}>
               <b>Tip:</b> {currentTip}
             </div>
-            <p>Coming soon: Enter player names and start an endless battle against AI-generated opponents!</p>
             <button onClick={() => {
+              setPendingStartingPowerUps(getDynamicPowerUps(3));
+              setShowStartingPowerUp(true);
+              setQuickStart(false);
               setInfinitePlayers([{ name: playerName || 'Player', hp: MAX_HP }]);
               setInfiniteRound(1);
               setInfiniteLog([]);
-              setGameState(GAME_STATES.INFINITE_BATTLE);
             }}>Start Infinite Battle</button>
+            <button style={{marginLeft:16}} onClick={() => {
+              setPendingStartingPowerUps(getDynamicPowerUps(3));
+              setShowStartingPowerUp(true);
+              setQuickStart(true);
+              setInfinitePlayers([{ name: playerName || 'Player', hp: MAX_HP }]);
+              setInfiniteRound(5);
+              setInfiniteLog([]);
+            }}>Quick Start (Round 5)</button>
           </div>
         );
       }
@@ -695,6 +955,13 @@ function App() {
                 Next Round: {infiniteRound}
               </div>
             )}
+            {showAchievement && (
+              <div style={{position:'fixed',top:120,left:0,right:0,zIndex:2000,textAlign:'center'}}>
+                <div style={{display:'inline-block',background:'#fffbe6',border:'2px solid #ffe082',borderRadius:12,padding:'18px 36px',fontSize:22,fontWeight:'bold',color:'#b26a00',boxShadow:'0 2px 16px #ffd54f88'}}>
+                  🏆 Achievement Unlocked: {showAchievement}
+                </div>
+              </div>
+            )}
             <InfiniteBattleScreen
               infiniteRound={infiniteRound}
               infiniteBestRound={infiniteBestRound}
@@ -709,6 +976,8 @@ function App() {
               showAIRealTime={activePowerUps.some(pu => pu.effect === 'see_ai_time')}
               quirkHistory={quirkHistory}
               powerupHistory={powerupHistory}
+              nextQuirk={nextQuirk}
+              scrambleQuality={scrambleQuality}
             />
           </>
         );

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 
 function StartScreen({ onStartBattle }) {
   const [playerName, setPlayerName] = useState('');
-  const [mode, setMode] = useState('single'); // 'single' or 'multi'
+  const [mode, setMode] = useState('single'); // 'single' or 'pvp'
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -44,11 +44,11 @@ function StartScreen({ onStartBattle }) {
             <input
               type="radio"
               name="mode"
-              value="multi"
-              checked={mode === 'multi'}
-              onChange={() => setMode('multi')}
+              value="pvp"
+              checked={mode === 'pvp'}
+              onChange={() => setMode('pvp')}
             />
-            Multiplayer
+            Player vs Player Mode
           </label>
         </div>
         <button onClick={handleStartClick}>Start Battle</button>

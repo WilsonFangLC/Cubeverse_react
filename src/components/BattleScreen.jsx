@@ -62,6 +62,9 @@ function BattleScreen({
   console.log("[BattleScreen] Rendering with comboCount:", comboCount); 
   console.log("[BattleScreen] Rendering with comboFlashValue:", comboFlashValue);
 
+  // Use 'pvp' instead of 'multi' for player vs player mode
+  const isPvp = mode === 'pvp';
+
   // Calculate combo flash position when needed
   useEffect(() => {
     console.log("[BattleScreen Effect] comboFlashValue changed to:", comboFlashValue);
@@ -122,7 +125,7 @@ function BattleScreen({
 
       <TurnInput 
         tymonCount={tymonCount}
-        onSubmitTime={mode === 'multi' ? processMultiplayerTurn : processTurn}
+        onSubmitTime={isPvp ? processMultiplayerTurn : processTurn}
         onUseTymon={handleUseTymon}
         currentScramble={currentScramble} // Pass currentScramble to TurnInput
         mode={mode} // Pass mode to TurnInput

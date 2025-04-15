@@ -10,13 +10,16 @@ function TurnInput({ tymonCount, onSubmitTime, onUseTymon, currentScramble, mode
     inputRef.current?.focus();
   }, []);
 
+  // Use 'pvp' instead of 'multi' for player vs player mode
+  const isPvp = mode === 'pvp';
+
   const handleSubmit = () => {
     const playerTime = parseFloat(timeInput);
     if (isNaN(playerTime) || playerTime <= 0) {
       alert("Please enter a valid positive number for your time.");
       return;
     }
-    if (mode === 'multi') {
+    if (isPvp) {
       const oppTime = parseFloat(opponentTime);
       if (isNaN(oppTime) || oppTime <= 0) {
         alert("Please enter a valid positive number for opponent's time.");
@@ -54,9 +57,9 @@ function TurnInput({ tymonCount, onSubmitTime, onUseTymon, currentScramble, mode
         onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
         ref={inputRef}
       />
-      {mode === 'multi' && (
+      {isPvp && (
         <>
-          <p>Enter opponent's solving time (in seconds):</p>
+          <p>Enter Player 2's solving time (in seconds):</p>
           <input
             type="number"
             id="opponentTimeInput"
@@ -72,7 +75,7 @@ function TurnInput({ tymonCount, onSubmitTime, onUseTymon, currentScramble, mode
       <button onClick={handleSubmit}>
         <img src="/attack.png" alt="Attack" style={{ verticalAlign: 'middle', width: '20px', height: '20px' }} /> Submit
       </button>
-      {tymonCount > 0 && mode !== 'multi' && (
+      {tymonCount > 0 && !isPvp && (
         <button onClick={handleTymon}>
           <img src="/tymon.png" alt="Tymon" style={{ verticalAlign: 'middle', width: '20px', height: '20px' }} /> Use Tymon ({tymonCount} left)
         </button>

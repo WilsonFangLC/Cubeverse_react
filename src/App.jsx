@@ -31,6 +31,10 @@ function App() {
   const [isProcessingTurn, setIsProcessingTurn] = useState(false);
   const [gameOverMessage, setGameOverMessage] = useState('');
 
+  // PvP: track combo for both players
+  const [p1Combo, setP1Combo] = useState(0);
+  const [p2Combo, setP2Combo] = useState(0);
+
   // State for visual effects
   const [playerImpact, setPlayerImpact] = useState(false);
   const [enemyImpact, setEnemyImpact] = useState(false);
@@ -232,6 +236,8 @@ function App() {
     setPlayerHP(MAX_HP);
     setEnemyHP(MAX_HP);
     setComboCount(0);
+    setP1Combo(0);
+    setP2Combo(0);
     setTymonCount(INITIAL_TYMON_COUNT);
     setLogEntries([]);
     setIsProcessingTurn(false);
@@ -301,45 +307,54 @@ function App() {
   const processMultiplayerTurn = (playerTime, _isTymon, opponentTime) => {
     if (isProcessingTurn) return;
     setIsProcessingTurn(true);
-    // Use opponentTime directly
     const enemyTime = opponentTime;
     const { DAMAGE_MULTIPLIER } = customConfig || DIFFICULTY_SETTINGS[difficulty];
-    let resultText = `<p>Your time: <span class='result-value'>${playerTime.toFixed(2)}</span> sec. Opponent's time: <span class='result-value'>${enemyTime.toFixed(2)}</span> sec.</p>`;
+    let resultText = `<p>Player 1 time: <span class='result-value'>${playerTime.toFixed(2)}</span> sec. Player 2 time: <span class='result-value'>${enemyTime.toFixed(2)}</span> sec.</p>`;
     let nextPlayerHP = playerHP;
     let nextEnemyHP = enemyHP;
-    let nextComboCount = comboCount;
+    let nextP1Combo = p1Combo;
+    let nextP2Combo = p2Combo;
     if (playerTime < enemyTime) {
+      // Player 1 wins
       const diff = enemyTime - playerTime;
+      nextP1Combo++;
+      nextP2Combo = 0;
       const baseDamage = Math.round((diff * DAMAGE_MULTIPLIER) + 5);
-      nextComboCount++;
-      const comboBonus = nextComboCount;
+      const comboBonus = nextP1Combo;
       const totalDamage = baseDamage + comboBonus;
       nextEnemyHP = Math.max(0, enemyHP - totalDamage);
-      resultText += `You were faster by <span class='result-value'>${diff.toFixed(2)}</span> sec. Opponent loses <span class='result-value'>${totalDamage}</span> HP.`;
-      showFloatingDamage('enemy', totalDamage, nextComboCount > 1);
-      setComboFlashValue(nextComboCount);
+      resultText += `Player 1 was faster by <span class='result-value'>${diff.toFixed(2)}</span> sec. Player 2 loses <span class='result-value'>${baseDamage}</span> HP + <span class='result-value'>${comboBonus}</span> combo bonus = <span class='result-value'>${totalDamage}</span> total damage! (${nextP1Combo}x combo)`;
+      showFloatingDamage('enemy', totalDamage, nextP1Combo > 1);
+      setComboFlashValue(nextP1Combo);
       hitSoundRef.current?.play();
       setEnemyImpact(true);
       setTimeout(() => setEnemyImpact(false), 500);
     } else if (playerTime > enemyTime) {
+      // Player 2 wins
       const diff = playerTime - enemyTime;
-      const damage = Math.round((diff * DAMAGE_MULTIPLIER) + 5);
-      nextPlayerHP = Math.max(0, playerHP - damage);
-      nextComboCount = 0;
-      resultText += `Opponent was faster by <span class='result-value'>${diff.toFixed(2)}</span> sec. You lose <span class='result-value'>${damage}</span> HP.`;
+      nextP2Combo++;
+      nextP1Combo = 0;
+      const baseDamage = Math.round((diff * DAMAGE_MULTIPLIER) + 5);
+      const comboBonus = nextP2Combo;
+      const totalDamage = baseDamage + comboBonus;
+      nextPlayerHP = Math.max(0, playerHP - totalDamage);
+      resultText += `Player 2 was faster by <span class='result-value'>${diff.toFixed(2)}</span> sec. Player 1 loses <span class='result-value'>${baseDamage}</span> HP + <span class='result-value'>${comboBonus}</span> combo bonus = <span class='result-value'>${totalDamage}</span> total damage! (${nextP2Combo}x combo)`;
+      showFloatingDamage('player', totalDamage, nextP2Combo > 1);
+      setComboFlashValue(nextP2Combo);
       hitSoundRef.current?.play();
       setPlayerImpact(true);
-      showFloatingDamage('player', damage, false);
       setTimeout(() => setPlayerImpact(false), 500);
     } else {
+      // Tie
       resultText += `It's a tie! No damage dealt.`;
     }
     appendLog(resultText);
     setPlayerHP(nextPlayerHP);
     setEnemyHP(nextEnemyHP);
-    setComboCount(nextComboCount);
+    setP1Combo(nextP1Combo);
+    setP2Combo(nextP2Combo);
     if (nextPlayerHP <= 0 || nextEnemyHP <= 0) {
-      const message = nextPlayerHP <= 0 ? 'Game Over! You were defeated.' : 'Victory! You defeated your opponent.';
+      const message = nextPlayerHP <= 0 ? 'Game Over! Player 2 wins.' : 'Victory! Player 1 wins.';
       setGameOverMessage(message);
       setGameState(GAME_STATES.GAME_OVER);
       if (nextEnemyHP <= 0 && nextPlayerHP > 0) {

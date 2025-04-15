@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 function TurnInput({ tymonCount, onSubmitTime, onUseTymon, currentScramble }) {
   const [timeInput, setTimeInput] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   const handleSubmit = () => {
     const playerTime = parseFloat(timeInput);
@@ -10,27 +15,30 @@ function TurnInput({ tymonCount, onSubmitTime, onUseTymon, currentScramble }) {
       return;
     }
     onSubmitTime(playerTime);
-    setTimeInput(''); // Clear input after submission
+    setTimeInput('');
+    inputRef.current?.focus();
   };
 
   const handleTymon = () => {
     onUseTymon();
-    setTimeInput(''); // Clear input if Tymon is used
+    setTimeInput('');
+    inputRef.current?.focus();
   };
 
   return (
-    <div id="turnInputArea"> {/* Added a wrapper div */}
+    <div id="turnInputArea">
       <h2>Your Turn</h2>
       <p>Scramble: <span className="scramble">{currentScramble}</span></p>
       <p>Enter your solving time (in seconds):</p>
       <input 
         type="number" 
-        id="timeInput" // Keep ID for potential CSS targeting
+        id="timeInput"
         placeholder="e.g., 11" 
         step="0.1" 
         value={timeInput}
         onChange={(e) => setTimeInput(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
+        ref={inputRef}
       />
       <button onClick={handleSubmit}>
         <img src="/attack.png" alt="Attack" style={{ verticalAlign: 'middle', width: '20px', height: '20px' }} /> Submit

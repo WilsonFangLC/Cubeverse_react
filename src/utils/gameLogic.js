@@ -10,6 +10,22 @@ export function normalRandom(mean, std) {
 // Constants
 export const MAX_HP = 50;
 export const INITIAL_TYMON_COUNT = 3;
-export const DAMAGE_MULTIPLIER = 5;
-export const ENEMY_TIME_MEAN = 11.62;
-export const ENEMY_TIME_STD = 1.10; 
+
+// Add difficulty-based parameters
+export const DIFFICULTY_SETTINGS = {
+  Easy: {
+    ENEMY_TIME_MEAN: 13.0,
+    ENEMY_TIME_STD: 1.5,
+    DAMAGE_MULTIPLIER: 4,
+  },
+  Medium: {
+    ENEMY_TIME_MEAN: 11.62,
+    ENEMY_TIME_STD: 1.1,
+    DAMAGE_MULTIPLIER: 5,
+  },
+  Hard: {
+    ENEMY_TIME_MEAN: 10.0,
+    ENEMY_TIME_STD: 0.8,
+    DAMAGE_MULTIPLIER: 6,
+  },
+};

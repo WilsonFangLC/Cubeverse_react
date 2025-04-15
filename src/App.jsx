@@ -3,25 +3,25 @@ import Papa from 'papaparse';
 import StartScreen from './components/StartScreen';
 import BattleScreen from './components/BattleScreen'; 
 import GameOverScreen from './components/GameOverScreen';
+import DifficultySelectionScreen from './components/DifficultySelectionScreen';
 import { 
   normalRandom, 
   MAX_HP, 
   INITIAL_TYMON_COUNT, 
-  DAMAGE_MULTIPLIER, 
-  ENEMY_TIME_MEAN, 
-  ENEMY_TIME_STD 
+  DIFFICULTY_SETTINGS 
 } from './utils/gameLogic';
 
 // Define game states
 const GAME_STATES = {
-  START: 'START',
+  NAME: 'NAME',
+  DIFFICULTY: 'DIFFICULTY',
   BATTLE: 'BATTLE',
   GAME_OVER: 'GAME_OVER',
 };
 
 function App() {
   // State Variables
-  const [gameState, setGameState] = useState(GAME_STATES.START);
+  const [gameState, setGameState] = useState(GAME_STATES.NAME);
   const [playerName, setPlayerName] = useState(''); 
   const [playerHP, setPlayerHP] = useState(MAX_HP);
   const [enemyHP, setEnemyHP] = useState(MAX_HP);
@@ -43,6 +43,7 @@ function App() {
   const defeatSoundRef = useRef(null);
 
   const [csvData, setCsvData] = useState([]);
+  const [difficulty, setDifficulty] = useState('Medium'); // Default to Medium
 
   useEffect(() => {
     // Link to the original stylesheet
@@ -87,6 +88,7 @@ function App() {
 
     const randomRow = getRandomRow();
     const scramble = randomRow ? randomRow.scr : 'Unknown scramble';
+    const { ENEMY_TIME_MEAN, ENEMY_TIME_STD, DAMAGE_MULTIPLIER } = DIFFICULTY_SETTINGS[difficulty];
     const enemyTime = randomRow && randomRow.rest ? parseFloat(randomRow.rest) : normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
 
     // Reset effects from previous turn
@@ -200,8 +202,13 @@ function App() {
 
   // -- Event Handlers --
 
-  const handleStartBattle = (name) => {
+  const handleNameEntered = (name) => {
     setPlayerName(name);
+    setGameState(GAME_STATES.DIFFICULTY);
+  };
+
+  const handleDifficultySelected = (level) => {
+    setDifficulty(level);
     // Reset core game state
     setPlayerHP(MAX_HP);
     setEnemyHP(MAX_HP);
@@ -210,25 +217,25 @@ function App() {
     setLogEntries([]);
     setIsProcessingTurn(false);
     setGameOverMessage('');
-    // Reset visual effect states
     setPlayerImpact(false);
     setEnemyImpact(false);
     setFloatingDamages([]);
-    setComboFlashValue(0); // Ensure flash value is reset
-    // Set game state LAST after all resets are queued
+    setComboFlashValue(0);
     setGameState(GAME_STATES.BATTLE);
   };
 
   const handlePlayAgain = () => {
-      setGameState(GAME_STATES.START); 
+    window.location.reload();
   };
 
   // -- Render Logic --
 
   const renderGameContent = () => {
     switch (gameState) {
-      case GAME_STATES.START:
-        return <StartScreen onStartBattle={handleStartBattle} />;
+      case GAME_STATES.NAME:
+        return <StartScreen onStartBattle={handleNameEntered} />;
+      case GAME_STATES.DIFFICULTY:
+        return <DifficultySelectionScreen onSelectDifficulty={handleDifficultySelected} />;
       case GAME_STATES.BATTLE:
         const randomRow = getRandomRow();
         const currentScramble = randomRow ? randomRow.scr : 'Unknown scramble';
@@ -247,6 +254,7 @@ function App() {
             floatingDamages={floatingDamages}
             comboFlashValue={comboFlashValue}
             currentScramble={currentScramble} // Pass currentScramble to BattleScreen
+            difficulty={difficulty} // Pass difficulty to BattleScreen
           />
         );
       case GAME_STATES.GAME_OVER:
@@ -275,7 +283,7 @@ function App() {
          <ul>
           <li>Both you and the enemy start with 50 HP.</li>
           <li>Each turn, you both "solve" the Rubik's Cube simultaneously.</li>
-          <li>You enter your solving time (in seconds), and the enemy's time is simulated (from a normal distribution with mean = 11.62 and std = 1.10).</li>
+          <li>You enter your solving time (in seconds), and the enemy's time is based on his real time for that specific scramble.</li>
           <li>The slower solver loses HP equal to round(|difference| × 5 + 5).</li>
           <li>If the times are equal, no damage is dealt.</li>
           <li>You can use your helper <em>Tymon</em> (3 times per game) to substitute your time with a value between 4 and 6 sec.</li>

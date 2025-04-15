@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 function StartScreen({ onStartBattle }) {
   const [playerName, setPlayerName] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   const handleStartClick = () => {
-    // Pass the entered name (or default) back to the App component
     onStartBattle(playerName.trim() || 'Player'); 
   };
 
@@ -12,23 +16,22 @@ function StartScreen({ onStartBattle }) {
     <>
       <h1>Cubeverse: Simultaneous Cube Challenge</h1>
       <h5>Developed by Lichi</h5>
-      {/* Use relative path from public folder for images */}
       <img src="/coverimage.png" alt="Logo" style={{ width: '700px', height: 'auto' }} /> 
       <div id="startForm">
         <p>Enter your name to start:</p>
         <input 
           type="text" 
-          id="playerNameInput" // Keep ID for potential CSS targeting if needed
+          id="playerNameInput"
           placeholder="Your name" 
           value={playerName}
           onChange={(e) => setPlayerName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') handleStartClick(); }}
+          ref={inputRef}
         />
         <button onClick={handleStartClick}>Start Battle</button>
       </div>
-      {/* The turn log will be part of the BattleScreen */}
     </>
   );
 }
 
-export default StartScreen; 
+export default StartScreen;

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 
 function StartScreen({ onStartBattle }) {
   const [playerName, setPlayerName] = useState('');
+  const [mode, setMode] = useState('single'); // 'single' or 'multi'
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -9,7 +10,7 @@ function StartScreen({ onStartBattle }) {
   }, []);
 
   const handleStartClick = () => {
-    onStartBattle(playerName.trim() || 'Player'); 
+    onStartBattle(playerName.trim() || 'Player', mode);
   };
 
   return (
@@ -28,6 +29,28 @@ function StartScreen({ onStartBattle }) {
           onKeyDown={(e) => { if (e.key === 'Enter') handleStartClick(); }}
           ref={inputRef}
         />
+        <div style={{ margin: '10px 0' }}>
+          <label>
+            <input
+              type="radio"
+              name="mode"
+              value="single"
+              checked={mode === 'single'}
+              onChange={() => setMode('single')}
+            />
+            Single Player
+          </label>
+          <label style={{ marginLeft: '20px' }}>
+            <input
+              type="radio"
+              name="mode"
+              value="multi"
+              checked={mode === 'multi'}
+              onChange={() => setMode('multi')}
+            />
+            Multiplayer
+          </label>
+        </div>
         <button onClick={handleStartClick}>Start Battle</button>
       </div>
     </>

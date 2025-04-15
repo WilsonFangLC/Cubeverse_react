@@ -3,7 +3,7 @@ import Papa from 'papaparse';
 import StartScreen from './components/StartScreen';
 import BattleScreen from './components/BattleScreen'; 
 import GameOverScreen from './components/GameOverScreen';
-import DifficultySelectionScreen from './components/DifficultySelectionScreen';
+import ConfigScreen from './components/ConfigScreen';
 import { 
   normalRandom, 
   MAX_HP, 
@@ -44,6 +44,9 @@ function App() {
 
   const [csvData, setCsvData] = useState([]);
   const [difficulty, setDifficulty] = useState('Medium'); // Default to Medium
+  const [customConfig, setCustomConfig] = useState(null);
+  const [mode, setMode] = useState('single'); // 'single' or 'multi'
+  const [currentScramble, setCurrentScramble] = useState('');
 
   useEffect(() => {
     // Link to the original stylesheet
@@ -82,14 +85,26 @@ function App() {
     setLogEntries(prev => [...prev, message]);
   };
 
+  const startNewTurn = () => {
+    const randomRow = getRandomRow();
+    setCurrentScramble(randomRow ? randomRow.scr : 'Unknown scramble');
+  };
+
   const processTurn = (playerTime, isTymon = false) => {
     if (isProcessingTurn || csvData.length === 0) return;
     setIsProcessingTurn(true);
 
     const randomRow = getRandomRow();
     const scramble = randomRow ? randomRow.scr : 'Unknown scramble';
-    const { ENEMY_TIME_MEAN, ENEMY_TIME_STD, DAMAGE_MULTIPLIER } = DIFFICULTY_SETTINGS[difficulty];
-    const enemyTime = randomRow && randomRow.rest ? parseFloat(randomRow.rest) : normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
+    setCurrentScramble(scramble);
+    // Use customConfig if available, otherwise fallback to difficulty
+    const { ENEMY_TIME_MEAN, ENEMY_TIME_STD, DAMAGE_MULTIPLIER, USE_REAL_SOLVE, TYMON_MEAN, TYMON_STD } = customConfig || DIFFICULTY_SETTINGS[difficulty];
+    let enemyTime;
+    if (USE_REAL_SOLVE) {
+      enemyTime = randomRow && randomRow.rest ? parseFloat(randomRow.rest) : normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
+    } else {
+      enemyTime = normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
+    }
 
     // Reset effects from previous turn
     setPlayerImpact(false);
@@ -172,6 +187,7 @@ function App() {
         setTimeout(() => {
             setIsProcessingTurn(false); 
         }, 50); 
+        startNewTurn();
     }
    };
 
@@ -192,24 +208,27 @@ function App() {
   };
 
   const handleUseTymon = () => {
+    const config = customConfig || DIFFICULTY_SETTINGS[difficulty];
+    const tymonMean = config.TYMON_MEAN ?? 5.0;
+    const tymonStd = config.TYMON_STD ?? 0.5;
     if (tymonCount > 0 && !isProcessingTurn && csvData.length > 0) {
       setTymonCount(prev => prev - 1);
-      const randomRow = getRandomRow();
-      const tymonTime = randomRow ? parseFloat(randomRow.time) : (Math.random() * 2) + 4;
+      // Use tymon sample distribution from config
+      const tymonTime = normalRandom(tymonMean, tymonStd);
       processTurn(tymonTime, true);
     }
   };
 
   // -- Event Handlers --
 
-  const handleNameEntered = (name) => {
+  const handleNameEntered = (name, selectedMode = 'single') => {
     setPlayerName(name);
+    setMode(selectedMode);
     setGameState(GAME_STATES.DIFFICULTY);
   };
 
-  const handleDifficultySelected = (level) => {
-    setDifficulty(level);
-    // Reset core game state
+  const handleConfigStart = (config) => {
+    setCustomConfig(config);
     setPlayerHP(MAX_HP);
     setEnemyHP(MAX_HP);
     setComboCount(0);
@@ -222,6 +241,7 @@ function App() {
     setFloatingDamages([]);
     setComboFlashValue(0);
     setGameState(GAME_STATES.BATTLE);
+    startNewTurn();
   };
 
   const handlePlayAgain = () => {
@@ -235,10 +255,14 @@ function App() {
       case GAME_STATES.NAME:
         return <StartScreen onStartBattle={handleNameEntered} />;
       case GAME_STATES.DIFFICULTY:
-        return <DifficultySelectionScreen onSelectDifficulty={handleDifficultySelected} />;
+        return (
+          <ConfigScreen
+            onStart={handleConfigStart}
+            initialConfig={DIFFICULTY_SETTINGS[difficulty]}
+          />
+        );
       case GAME_STATES.BATTLE:
-        const randomRow = getRandomRow();
-        const currentScramble = randomRow ? randomRow.scr : 'Unknown scramble';
+        const config = customConfig || DIFFICULTY_SETTINGS[difficulty];
         return (
           <BattleScreen 
             playerName={playerName}
@@ -247,14 +271,17 @@ function App() {
             comboCount={comboCount}
             tymonCount={tymonCount}
             logEntries={logEntries}
-            onSubmitTime={processTurn} 
-            onUseTymon={handleUseTymon}
+            processTurn={processTurn}
+            processMultiplayerTurn={processMultiplayerTurn}
+            handleUseTymon={handleUseTymon}
             playerImpact={playerImpact}
             enemyImpact={enemyImpact}
             floatingDamages={floatingDamages}
             comboFlashValue={comboFlashValue}
-            currentScramble={currentScramble} // Pass currentScramble to BattleScreen
-            difficulty={difficulty} // Pass difficulty to BattleScreen
+            currentScramble={currentScramble}
+            difficulty={difficulty}
+            config={config}
+            mode={mode}
           />
         );
       case GAME_STATES.GAME_OVER:
@@ -268,6 +295,61 @@ function App() {
         );
       default:
         return <p>Loading Game...</p>;
+    }
+  };
+
+  const processMultiplayerTurn = (playerTime, _isTymon, opponentTime) => {
+    if (isProcessingTurn) return;
+    setIsProcessingTurn(true);
+    // Use opponentTime directly
+    const enemyTime = opponentTime;
+    const { DAMAGE_MULTIPLIER } = customConfig || DIFFICULTY_SETTINGS[difficulty];
+    let resultText = `<p>Your time: <span class='result-value'>${playerTime.toFixed(2)}</span> sec. Opponent's time: <span class='result-value'>${enemyTime.toFixed(2)}</span> sec.</p>`;
+    let nextPlayerHP = playerHP;
+    let nextEnemyHP = enemyHP;
+    let nextComboCount = comboCount;
+    if (playerTime < enemyTime) {
+      const diff = enemyTime - playerTime;
+      const baseDamage = Math.round((diff * DAMAGE_MULTIPLIER) + 5);
+      nextComboCount++;
+      const comboBonus = nextComboCount;
+      const totalDamage = baseDamage + comboBonus;
+      nextEnemyHP = Math.max(0, enemyHP - totalDamage);
+      resultText += `You were faster by <span class='result-value'>${diff.toFixed(2)}</span> sec. Opponent loses <span class='result-value'>${totalDamage}</span> HP.`;
+      showFloatingDamage('enemy', totalDamage, nextComboCount > 1);
+      setComboFlashValue(nextComboCount);
+      hitSoundRef.current?.play();
+      setEnemyImpact(true);
+      setTimeout(() => setEnemyImpact(false), 500);
+    } else if (playerTime > enemyTime) {
+      const diff = playerTime - enemyTime;
+      const damage = Math.round((diff * DAMAGE_MULTIPLIER) + 5);
+      nextPlayerHP = Math.max(0, playerHP - damage);
+      nextComboCount = 0;
+      resultText += `Opponent was faster by <span class='result-value'>${diff.toFixed(2)}</span> sec. You lose <span class='result-value'>${damage}</span> HP.`;
+      hitSoundRef.current?.play();
+      setPlayerImpact(true);
+      showFloatingDamage('player', damage, false);
+      setTimeout(() => setPlayerImpact(false), 500);
+    } else {
+      resultText += `It's a tie! No damage dealt.`;
+    }
+    appendLog(resultText);
+    setPlayerHP(nextPlayerHP);
+    setEnemyHP(nextEnemyHP);
+    setComboCount(nextComboCount);
+    if (nextPlayerHP <= 0 || nextEnemyHP <= 0) {
+      const message = nextPlayerHP <= 0 ? 'Game Over! You were defeated.' : 'Victory! You defeated your opponent.';
+      setGameOverMessage(message);
+      setGameState(GAME_STATES.GAME_OVER);
+      if (nextEnemyHP <= 0 && nextPlayerHP > 0) {
+        victorySoundRef.current?.play();
+      } else {
+        defeatSoundRef.current?.play();
+      }
+    } else {
+      setTimeout(() => setIsProcessingTurn(false), 50);
+      startNewTurn();
     }
   };
 

@@ -46,7 +46,12 @@ function BattleScreen({
   playerImpact, 
   enemyImpact,
   floatingDamages,
-  comboFlashValue
+  comboFlashValue,
+  config, // <-- add config prop
+  mode, // Add mode prop
+  processMultiplayerTurn, // Add processMultiplayerTurn prop
+  processTurn, // Add processTurn prop
+  handleUseTymon // Add handleUseTymon prop
 }) {
   const MAX_HP = 50;
   const battlefieldRef = useRef(null); // Ref for positioning effects
@@ -117,9 +122,10 @@ function BattleScreen({
 
       <TurnInput 
         tymonCount={tymonCount}
-        onSubmitTime={onSubmitTime}
-        onUseTymon={onUseTymon}
+        onSubmitTime={mode === 'multi' ? processMultiplayerTurn : processTurn}
+        onUseTymon={handleUseTymon}
         currentScramble={currentScramble} // Pass currentScramble to TurnInput
+        mode={mode} // Pass mode to TurnInput
       />
 
       <GameLog logEntries={logEntries} />

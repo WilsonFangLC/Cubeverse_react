@@ -9,7 +9,12 @@ import {
   normalRandom, 
   MAX_HP, 
   INITIAL_TYMON_COUNT, 
-  DIFFICULTY_SETTINGS 
+  DIFFICULTY_SETTINGS,
+  mean,
+  ao,
+  computeTurn,
+  computeInfiniteTurn,
+  computeCoopTurn
 } from './utils/gameLogic';
 import { Line } from 'react-chartjs-2';
 
@@ -344,103 +349,68 @@ function App() {
   const processTurn = (playerTime, isTymon = false) => {
     if (isProcessingTurn || csvData.length === 0) return;
     setIsProcessingTurn(true);
-
     const randomRow = getRandomRow();
     const scramble = randomRow ? randomRow.scr : 'Unknown scramble';
     setCurrentScramble(scramble);
-    // Use customConfig if available, otherwise fallback to difficulty
-    const { ENEMY_TIME_MEAN, ENEMY_TIME_STD, DAMAGE_MULTIPLIER, USE_REAL_SOLVE, TYMON_MEAN, TYMON_STD } = customConfig || DIFFICULTY_SETTINGS[difficulty];
+    const { ENEMY_TIME_MEAN, ENEMY_TIME_STD, DAMAGE_MULTIPLIER, USE_REAL_SOLVE } = customConfig || DIFFICULTY_SETTINGS[difficulty];
     let enemyTime;
     if (USE_REAL_SOLVE) {
       enemyTime = randomRow && randomRow.rest ? parseFloat(randomRow.rest) : normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
     } else {
       enemyTime = normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
     }
-
-    // Reset effects from previous turn
     setPlayerImpact(false);
     setEnemyImpact(false);
     setComboFlashValue(0);
-    // Floating damages will clear themselves via timeout
-
     let resultText = `<p>`;
     if (isTymon) {
       resultText += `<em>Tymon</em> assisted with a time of <span class="result-value">${playerTime.toFixed(2)}</span> sec. `;
     } else {
       resultText += `Your time: <span class="result-value">${playerTime.toFixed(2)}</span> sec. `;
     }
-    resultText += `Enemy's time: <span class="result-value">${enemyTime.toFixed(2)}</span> sec. `;
-    resultText += `<br>Scramble: <span class="scramble">${scramble}</span>`;
-
-    let nextPlayerHP = playerHP;
-    let nextEnemyHP = enemyHP;
-    let nextComboCount = comboCount;
-    
-    if (playerTime < enemyTime) {
-      // Player wins round
-      const diff = enemyTime - playerTime;
-      const baseDamage = Math.round((diff * DAMAGE_MULTIPLIER) + 5);
-      nextComboCount++;
-      const comboBonus = nextComboCount;
-      const totalDamage = baseDamage + comboBonus;
-      nextEnemyHP = Math.max(0, enemyHP - totalDamage);
-      
-      resultText += `You were faster by <span class="result-value">${diff.toFixed(2)}</span> sec. `;
-      if (nextComboCount > 1) {
-        resultText += `Enemy loses <span class="result-value">${baseDamage}</span> HP + <span class="result-value">${comboBonus}</span> combo bonus = <span class="result-value">${totalDamage}</span> total damage! (${nextComboCount}x combo)`;
-        showFloatingDamage('enemy', totalDamage, true); // Trigger combo damage effect
-        setComboFlashValue(nextComboCount); // Trigger combo flash
-      } else {
-        resultText += `Enemy loses <span class="result-value">${totalDamage}</span> HP.`;
-        showFloatingDamage('enemy', totalDamage, false); // Trigger regular damage effect
-      }
-       hitSoundRef.current?.play();
-       setEnemyImpact(true); // Trigger enemy impact animation
-       setTimeout(() => setEnemyImpact(false), 500); // Remove impact class later
-
-    } else if (playerTime > enemyTime) {
-      // Enemy wins round
-      const diff = playerTime - enemyTime;
-      const damage = Math.round((diff * DAMAGE_MULTIPLIER) + 5);
-      nextPlayerHP = Math.max(0, playerHP - damage);
-      nextComboCount = 0; // Reset combo
-
-      resultText += `Enemy was faster by <span class="result-value">${diff.toFixed(2)}</span> sec. You lose <span class="result-value">${damage}</span> HP.`;
-       hitSoundRef.current?.play();
-       setPlayerImpact(true); // Trigger player impact animation
-       showFloatingDamage('player', damage, false);
-       setTimeout(() => setPlayerImpact(false), 500);
-    } else {
-      // Tie
-      resultText += `It's a tie! No damage dealt.`;
-    }
-    resultText += `</p>`;
-
+    resultText += `Enemy's time: <span class="result-value">${enemyTime.toFixed(2)}</span> sec. <br>Scramble: <span class="scramble">${scramble}</span>`;
+    const turnResult = computeTurn({
+      playerTime,
+      enemyTime,
+      playerHP,
+      enemyHP,
+      comboCount,
+      damageMultiplier: DAMAGE_MULTIPLIER
+    });
+    resultText += turnResult.resultText;
     appendLog(resultText);
-
-    // Update core game state
-    setPlayerHP(nextPlayerHP);
-    setEnemyHP(nextEnemyHP);
-    setComboCount(nextComboCount);
-
-    // Check for game over
-    if (nextPlayerHP <= 0 || nextEnemyHP <= 0) {
-        const message = nextPlayerHP <= 0 ? "Game Over! You were defeated." : "Victory! You defeated the enemy.";
-        setGameOverMessage(message);
-        setGameState(GAME_STATES.GAME_OVER);
-        if (nextEnemyHP <= 0 && nextPlayerHP > 0) {
-           victorySoundRef.current?.play();
-        } else {
-           defeatSoundRef.current?.play();
-        }
-    } else {
-        // Only re-enable processing if game is not over
-        setTimeout(() => {
-            setIsProcessingTurn(false); 
-        }, 50); 
-        startNewTurn();
+    setPlayerHP(turnResult.nextPlayerHP);
+    setEnemyHP(turnResult.nextEnemyHP);
+    setComboCount(turnResult.nextComboCount);
+    if (turnResult.floatingDamage) {
+      showFloatingDamage(turnResult.floatingDamage.target, turnResult.floatingDamage.amount, turnResult.floatingDamage.isCombo);
     }
-   };
+    setComboFlashValue(turnResult.comboFlash);
+    if (turnResult.floatingDamage && turnResult.floatingDamage.target === 'enemy') {
+      hitSoundRef.current?.play();
+      setEnemyImpact(true);
+      setTimeout(() => setEnemyImpact(false), 500);
+    } else if (turnResult.floatingDamage && turnResult.floatingDamage.target === 'player') {
+      hitSoundRef.current?.play();
+      setPlayerImpact(true);
+      setTimeout(() => setPlayerImpact(false), 500);
+    }
+    if (turnResult.nextPlayerHP <= 0 || turnResult.nextEnemyHP <= 0) {
+      const message = turnResult.nextPlayerHP <= 0 ? "Game Over! You were defeated." : "Victory! You defeated the enemy.";
+      setGameOverMessage(message);
+      setGameState(GAME_STATES.GAME_OVER);
+      if (turnResult.nextEnemyHP <= 0 && turnResult.nextPlayerHP > 0) {
+        victorySoundRef.current?.play();
+      } else {
+        defeatSoundRef.current?.play();
+      }
+    } else {
+      setTimeout(() => {
+        setIsProcessingTurn(false);
+      }, 50);
+      startNewTurn();
+    }
+  };
 
   // Helper function to add floating damage effect data
   const showFloatingDamage = (target, amount, isCombo) => {
@@ -521,80 +491,42 @@ function App() {
     const randomRow = getRandomRow();
     const scramble = randomRow ? randomRow.scr : 'Unknown scramble';
     setCurrentScramble(scramble);
-    const { ENEMY_TIME_MEAN, ENEMY_TIME_STD, DAMAGE_MULTIPLIER, USE_REAL_SOLVE } = customConfig || DIFFICULTY_SETTINGS[difficulty];
-    let bossTime;
-    if (USE_REAL_SOLVE) {
-      bossTime = randomRow && randomRow.rest ? parseFloat(randomRow.rest) : normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
-    } else {
-      bossTime = normalRandom(ENEMY_TIME_MEAN, ENEMY_TIME_STD);
-    }
-    // Only consider alive players
-    const aliveIdxs = coopPlayers.map((p, i) => p.hp > 0 ? i : -1).filter(i => i !== -1);
-    const aliveTimes = aliveIdxs.map(i => times[i]);
-    // Find fastest among alive
-    const minTime = Math.min(...aliveTimes);
-    const fastestIdxs = aliveIdxs.filter(i => times[i] === minTime);
-    // Boss attacks slowest alive player
-    const maxTime = Math.max(...aliveTimes);
-    const slowestIdx = aliveIdxs.find(i => times[i] === maxTime);
-    let nextPlayers = [...coopPlayers];
-    let nextBossHP = bossHP;
-    let log = `<p>Boss time: <span class='result-value'>${bossTime.toFixed(2)}</span> sec.<br/>`;
+    const config = customConfig || DIFFICULTY_SETTINGS[difficulty];
+    const result = computeCoopTurn({
+      times,
+      coopPlayers,
+      bossHP,
+      coopTask,
+      config
+    });
+    // Build log HTML from result.log
+    let logHtml = `<p>Boss HP: <span class='result-value'>${bossHP}</span><br/>`;
     times.forEach((t, i) => {
       const eliminated = coopPlayers[i].hp <= 0;
-      log += `${coopPlayers[i].name}: <span class='result-value'>${eliminated ? 'ELIMINATED' : t.toFixed(2) + ' sec.'}</span> `;
+      logHtml += `${coopPlayers[i].name}: <span class='result-value'>${eliminated ? 'ELIMINATED' : t.toFixed(2) + ' sec.'}</span> `;
     });
-    log += '<br/>';
-    // Alive players faster than boss deal damage
-    aliveIdxs.forEach(idx => {
-      if (times[idx] < bossTime) {
-        const diff = bossTime - times[idx];
-        const dmg = Math.round(diff * DAMAGE_MULTIPLIER + 5);
-        nextBossHP = Math.max(0, nextBossHP - dmg);
-        log += `${coopPlayers[idx].name} hits boss for <span class='result-value'>${dmg}</span>! `;
-        hitSoundRef.current?.play(); // Play hit sound when boss is hit
+    logHtml += '<br/>';
+    result.log.forEach(entry => {
+      if (entry.type === 'hit') {
+        logHtml += `${entry.player} hits boss for <span class='result-value'>${entry.dmg}</span>! `;
+      } else if (entry.type === 'task') {
+        logHtml += entry.achieved ? `<br/><span style='color:green;font-weight:bold'>Task achieved! Bonus 5 damage to boss!</span> ` : `<br/><span style='#888'>Task failed.</span> `;
+      } else if (entry.type === 'boss_hit') {
+        logHtml += `Boss hits ${entry.player} for <span class='result-value'>${entry.dmg}</span>!`;
+      } else if (entry.type === 'boss_no_hit') {
+        logHtml += 'Boss was not faster than any player.';
       }
     });
-    // Coop task check
-    let taskAchieved = false;
-    if (coopTask) {
-      if (coopTask.type === 'average') {
-        // Only alive players
-        const avg = aliveTimes.reduce((a, b) => a + b, 0) / aliveTimes.length;
-        if (Math.abs(avg - coopTask.target) <= 0.3) taskAchieved = true;
-      } else if (coopTask.type === 'identical') {
-        // All alive times are the same integer and match target (±0.5)
-        if (aliveTimes.every(t => Math.abs(t - coopTask.target) <= 0.5)) taskAchieved = true;
-      }
-      if (taskAchieved) {
-        nextBossHP = Math.max(0, nextBossHP - 5);
-        log += `<br/><span style='color:green;font-weight:bold'>Task achieved! Bonus 5 damage to boss!</span> `;
-      } else {
-        log += `<br/><span style='#888'>Task failed.</span> `;
-      }
-    }
-    // Boss attacks slowest alive player if boss is faster
-    if (bossTime < maxTime && slowestIdx !== undefined) {
-      const diff = maxTime - bossTime;
-      const dmg = Math.round(diff * DAMAGE_MULTIPLIER + 5);
-      nextPlayers[slowestIdx].hp = Math.max(0, nextPlayers[slowestIdx].hp - dmg);
-      log += `Boss hits ${coopPlayers[slowestIdx].name} for <span class='result-value'>${dmg}</span>!`;
-      hitSoundRef.current?.play(); // Play hit sound when boss hits a player
-    } else {
-      log += 'Boss was not faster than any player.';
-    }
-    log += '</p>';
-    setCoopLog(prev => [...prev, log]);
-    setCoopPlayers(nextPlayers);
-    setBossHP(nextBossHP);
-    // Next task
+    logHtml += '</p>';
+    setCoopLog(prev => [...prev, logHtml]);
+    setCoopPlayers(result.nextPlayers);
+    setBossHP(result.nextBossHP);
     setCoopTask(generateCoopTask(coopPlayers));
-    // Check for win/lose
-    if (nextBossHP <= 0) {
+    if (result.nextBossHP <= 0) {
       setGameOverMessage('Victory! The boss is defeated!');
       setGameState(GAME_STATES.GAME_OVER);
       victorySoundRef.current?.play();
-    } else if (nextPlayers.every(p => p.hp <= 0)) {
+    } else if (result.nextPlayers.every(p => p.hp <= 0)) {
       setGameOverMessage('Game Over! All players defeated.');
       setGameState(GAME_STATES.GAME_OVER);
       defeatSoundRef.current?.play();
@@ -655,30 +587,11 @@ function App() {
   const [pbAo5, setPbAo5] = useState(null);
   const [pbAo12, setPbAo12] = useState(null);
 
-  // --- Helper functions for mo3, ao5, ao12 ---
-  function mean(arr) {
-    if (arr.length === 0) return null;
-    return arr.reduce((a, b) => a + b, 0) / arr.length;
-  }
-  function ao(arr, n) {
-    if (arr.length < n) return null;
-    const lastN = arr.slice(-n);
-    // Remove best and worst for ao5/ao12
-    if (n >= 5) {
-      const sorted = [...lastN].sort((a, b) => a - b);
-      sorted.shift(); // remove best
-      sorted.pop(); // remove worst
-      return mean(sorted);
-    }
-    return mean(lastN);
-  }
-
   // Infinite: process a round
   function processInfiniteTurn(playerTime) {
     if (!infiniteAI) return;
     const ai = infiniteAI;
     let aiTime;
-    // Fixed time quirks take precedence
     if (ai.quirk.effect === 'boss_time_9') {
       aiTime = 9.00;
     } else if (ai.quirk.effect === 'boss_time_8') {
@@ -690,15 +603,23 @@ function App() {
     } else if (ai.quirk.effect === 'tymon_power') {
       aiTime = 4 + Math.random() * 2;
     } else {
-      // Make AI stronger as rounds increase (lower time = stronger)
-      // Early rounds: AI is easier (higher mean), later rounds: AI is faster (lower mean)
-      // Example: mean decreases from 13.5 (round 1) to 10.0 (round 10)
       const minMean = 10.0;
       const maxMean = 13.5;
-      const mean = Math.max(minMean, maxMean - (infiniteRound - 1) * 0.4);
-      const std = 0.7 + 0.05 * Math.min(infiniteRound, 10); // Slightly more consistent as rounds go
-      aiTime = normalRandom(mean, std);
+      const meanVal = Math.max(minMean, maxMean - (infiniteRound - 1) * 0.4);
+      const std = 0.7 + 0.05 * Math.min(infiniteRound, 10);
+      aiTime = normalRandom(meanVal, std);
     }
+    const result = computeInfiniteTurn({
+      playerTime,
+      aiTime,
+      playerHP,
+      enemyHP,
+      infiniteRound,
+      permComboBonus,
+      activePowerUps,
+      aiQuirk: ai.quirk.effect,
+      maxHP: MAX_HP
+    });
     let log = `<p><b>Round ${infiniteRound}</b><br/>`;
     log += `Your time: <span class='result-value'>${playerTime.toFixed(2)}</span> sec<br/>`;
     log += `${ai.name}'s time: <span class='result-value'>${aiTime.toFixed(2)}</span> sec<br/>`;
@@ -706,139 +627,32 @@ function App() {
     if (activePowerUps.length > 0) {
       log += `<b>Your Power-Ups:</b> ${activePowerUps.map(pu => pu.name).join(', ')}<br/>`;
     }
-    let playerWins = playerTime < aiTime;
-    let baseDamageFormula = `|${playerTime.toFixed(2)} - ${aiTime.toFixed(2)}| * 5 + 5`;
-    let baseDamage = Math.abs(playerTime - aiTime) * 5 + 5;
-    let damage = Math.round(baseDamage);
-    let damageFormula = baseDamageFormula;
-    let formulaSteps = [`Base: ${baseDamageFormula} = ${baseDamage.toFixed(2)}`];
-    if (infiniteRound <= 5) {
-      damage = Math.round(damage * 1.5); // More damage early
-      damageFormula += `, then * 1.5 (early round)`;
-      formulaSteps.push(`Early round: ${Math.round(baseDamage)} * 1.5 = ${Math.round(baseDamage * 1.5)}`);
-    }
-    if (permComboBonus) {
-      damage += permComboBonus;
-      damageFormula += `, +${permComboBonus} perm combo bonus`;
-      formulaSteps.push(`+${permComboBonus} permanent combo bonus`);
-    }
-    let nextPlayerHP = playerHP;
-    let nextAIHP = enemyHP;
-    if (activePowerUps.some(pu => pu.effect === 'halve_next_damage') && !playerWins) {
-      damage = Math.ceil(damage / 2);
-      damageFormula += ', then halved (Halve Next Damage)';
-      formulaSteps.push(`Halved: ceil(prev / 2) = ${damage}`);
-    }
-    if (activePowerUps.some(pu => pu.effect === 'plus10_next') && playerWins) {
-      damage += 10;
-      damageFormula += ', +10 (Deal +10 Next Hit)';
-      formulaSteps.push('+10 from Deal +10 Next Hit');
-    }
-    if (activePowerUps.some(pu => pu.effect === 'shield') && !playerWins) {
-      damage = 0;
-      damageFormula += ', set to 0 (Shield)';
-      formulaSteps.push('Set to 0 by Shield');
-    }
-    if (ai.quirk.effect === 'double_damage') {
-      damage *= 2;
-      damageFormula += ', *2 (Double Damage quirk)';
-      formulaSteps.push('Doubled by Double Damage quirk');
-    }
-    if (ai.quirk.effect === 'reverse') {
-      log += `Quirk effect: Slower solver wins this round!<br/>`;
-      playerWins = !playerWins;
-    }
-    if (ai.quirk.effect === 'combo_breaker') {
-      log += `Quirk effect: Combos reset this round.<br/>`;
-      setComboCount(0);
-    }
-    if (ai.quirk.effect === 'lucky_hit' && !infiniteQuirkUsed) {
-      log += `Quirk effect: First hit this round deals +10 bonus damage!<br/>`;
-      damage += 10;
-      setInfiniteQuirkUsed(true);
-    }
-    if (ai.quirk.effect === 'mirror') {
-      aiTime = playerTime;
-      log += `Quirk effect: AI copies your time exactly!<br/>`;
-    }
-    if (ai.quirk.effect === 'combo_drain') {
-      setComboCount(0);
-      log += `Quirk effect: Your combo bonus is drained!<br/>`;
-    }
-    if (ai.quirk.effect === 'heal_ai' && !playerWins) {
-      nextAIHP = Math.min(nextAIHP + 10, MAX_HP + 5 * infiniteRound);
-      log += `Quirk effect: AI heals 10 HP!<br/>`;
-    }
-    if (ai.quirk.effect === 'half_damage') {
-      damage = Math.ceil(damage / 2);
-      damageFormula += ', then halved (Half Damage quirk)';
-      formulaSteps.push(`Halved: ceil(prev / 2) = ${damage}`);
-    }
-    if (ai.quirk.effect === 'parity_error') {
-      if (Math.floor(playerTime) % 2 === 0) {
-        playerTime += 2;
-        log += `Parity Error: +2s penalty for not entering an odd time!<br/>`;
-      }
-    }
-    if (ai.quirk.effect === 'oll_skip') {
-      playerTime -= 1.5;
-      log += `OLL Skip: You get a 1.5s time bonus!<br/>`;
-    }
-    if (ai.quirk.effect === 'lockup') {
-      playerTime += 1.5;
-      log += `Lockup: Your time is increased by 1.5s!<br/>`;
-    }
-    if (ai.quirk.effect === 'inspection_plus') {
-      log += `Inspection+: You see AI's time before submitting!<br/>`;
-      // (Handled in UI: showAIRealTime)
-    }
-    if (ai.quirk.effect === 'plus2_penalty') {
-      playerTime += 2;
-      log += `+2 Penalty: Your time is increased by 2s!<br/>`;
-    }
-    if (activePowerUps.some(pu => pu.effect === 'pll_skip')) {
-      playerTime -= 2;
-      log += `Power-Up: PLL Skip! Subtract 2s from your time.<br/>`;
-    }
-    if (activePowerUps.some(pu => pu.effect === 'perfect_cross') && playerWins) {
-      damage *= 2;
-      log += `Power-Up: Perfect Cross! Double damage for your first win this round.<br/>`;
-    }
-    // Play hit sound for every turn
-    if (hitSoundRef.current) hitSoundRef.current.currentTime = 0, hitSoundRef.current.play();
-    // Consistency bonus: if playerTime within ±0.2s of previous, +3 damage
-    if (typeof processInfiniteTurn.lastTime === 'number' && Math.abs(playerTime - processInfiniteTurn.lastTime) <= 0.2) {
-      damage += 3;
-      damageFormula += ', +3 (Consistency Bonus)';
-      formulaSteps.push('+3 Consistency Bonus');
-    }
-    // PB tracking: highlight if this is the fastest time this run
-    if (!processInfiniteTurn.pb || playerTime < processInfiniteTurn.pb) {
-      processInfiniteTurn.pb = playerTime;
-      log += `<span style='color:#16a085'><b>New PB for this run: ${playerTime.toFixed(2)}s!</b></span><br/>`;
-    }
-    if (playerWins) {
-      nextAIHP = Math.max(0, enemyHP - damage);
-      log += `<span style='color:green'><b>You win!</b> ${ai.name} loses <b>${damage}</b> HP.</span><br/>`;
+    log += `<b>Damage Calculation:</b> ${result.damageFormula}<br/>`;
+    log += `<b>Steps:</b> ${result.formulaSteps.join(' → ')}<br/>`;
+    if (result.playerWins) {
+      log += `<span style='color:green'><b>You win!</b> ${ai.name} loses <b>${result.damage}</b> HP.</span><br/>`;
+      hitSoundRef.current?.play(); // Play hit sound for player win
+      setEnemyImpact(true);
+      setTimeout(() => setEnemyImpact(false), 500);
     } else {
-      nextPlayerHP = Math.max(0, playerHP - damage);
-      log += `<span style='color:red'><b>You lose!</b> You take <b>${damage}</b> HP damage.</span><br/>`;
+      log += `<span style='color:red'><b>You lose!</b> You take <b>${result.damage}</b> HP damage.</span><br/>`;
+      hitSoundRef.current?.play(); // Play hit sound for player loss
+      setPlayerImpact(true);
+      setTimeout(() => setPlayerImpact(false), 500);
     }
-    log += `<b>Your HP:</b> ${nextPlayerHP} / ${MAX_HP} | <b>${ai.name} HP:</b> ${nextAIHP}<br/>`;
-    log += `<b>Damage Calculation:</b> ${damageFormula}<br/>`;
-    log += `<b>Steps:</b> ${formulaSteps.join(' → ')}<br/>`;
+    log += `<b>Your HP:</b> ${result.nextPlayerHP} / ${MAX_HP} | <b>${ai.name} HP:</b> ${result.nextAIHP}<br/>`;
     log += `</p>`;
-    setPlayerHP(nextPlayerHP);
-    setEnemyHP(nextAIHP);
+    setPlayerHP(result.nextPlayerHP);
+    setEnemyHP(result.nextAIHP);
     setInfiniteLog(prev => [...prev, log]);
-    if (nextPlayerHP <= 0) {
+    if (result.nextPlayerHP <= 0) {
       setGameOverMessage('Game Over! You were defeated by ' + ai.name + '.');
       setGameState(GAME_STATES.GAME_OVER);
       defeatSoundRef.current?.play();
-    } else if (nextAIHP <= 0) {
+    } else if (result.nextAIHP <= 0) {
       const nextRound = infiniteRound + 1;
       setInfiniteRound(nextRound);
-      setEnemyHP(MAX_HP + 5 * infiniteRound); // AI gets more HP each round
+      setEnemyHP(MAX_HP + 5 * infiniteRound);
       if (nextRound > infiniteBestRound) {
         setInfiniteBestRound(nextRound);
         localStorage.setItem('infiniteBestRound', nextRound);
@@ -850,7 +664,6 @@ function App() {
         }, 1200);
         return;
       }
-      // Every 2 rounds, offer power-up
       if ((infiniteRound + 1) % 2 === 0) {
         setPendingPowerUps(getDynamicPowerUps(3, usedPowerUps));
         setShowPowerUpChoice(true);
@@ -861,59 +674,7 @@ function App() {
         }, 1000);
       }
     }
-    // Remove one-time power-ups after use
     setActivePowerUps(prev => prev.filter(pu => !['halve_next_damage','see_ai_time','shield','plus10_next'].includes(pu.effect)));
-
-    // Check for achievements
-    if (ACHIEVEMENTS[0].check(infiniteRound) && !unlockedAchievements.includes('round10')) {
-      setUnlockedAchievements(prev => [...prev, 'round10']);
-      setShowAchievement(ACHIEVEMENTS[0].label);
-    }
-    if (ACHIEVEMENTS[1].check(infiniteRound) && !unlockedAchievements.includes('boss3')) {
-      setUnlockedAchievements(prev => [...prev, 'boss3']);
-      setShowAchievement(ACHIEVEMENTS[1].label);
-    }
-    if (ACHIEVEMENTS[2].check(nextPlayerHP, log) && !unlockedAchievements.includes('clutch')) {
-      setUnlockedAchievements(prev => [...prev, 'clutch']);
-      setShowAchievement(ACHIEVEMENTS[2].label);
-    }
-    if (showAchievement) setTimeout(() => setShowAchievement(null), 1800);
-
-    // Add time to solveTimes
-    setSolveTimes(prev => {
-      const newTimes = [...prev, playerTime];
-      // Compute PBs
-      const mo3 = mean(newTimes.slice(-3));
-      const ao5 = ao(newTimes, 5);
-      const ao12 = ao(newTimes, 12);
-      let extraDmg = 0;
-      let newPb = false;
-      if (!pbSingle || playerTime < pbSingle) { setPbSingle(playerTime); extraDmg += 3; newPb = true; }
-      if (mo3 && (!pbMo3 || mo3 < pbMo3)) { setPbMo3(mo3); extraDmg += 3; newPb = true; }
-      if (ao5 && (!pbAo5 || ao5 < pbAo5)) { setPbAo5(ao5); extraDmg += 3; newPb = true; }
-      if (ao12 && (!pbAo12 || ao12 < pbAo12)) { setPbAo12(ao12); extraDmg += 3; newPb = true; }
-      if (extraDmg > 0) {
-        damage += extraDmg;
-        log += `<span style='color:#e67e22'><b>PB Bonus: +${extraDmg} damage for new PB(s)!</b></span><br/>`;
-      }
-      return newTimes;
-    });
-
-    if (activePowerUps.some(pu => pu.effect === 'odd_master') && playerWins) {
-      if (Math.floor(playerTime) % 2 === 1) {
-        damage += 7;
-        damageFormula += ', +7 (Odd Master)';
-        formulaSteps.push('+7 Odd Master');
-      }
-    }
-    if (activePowerUps.some(pu => pu.effect === 'hp_boost')) {
-      // Only apply once per power-up selection
-      if (!window._hpBoosted) {
-        window._hpBoosted = true;
-        setPlayerHP(hp => Math.min(hp + 10, MAX_HP + 10));
-        log += `HP Boost: Max HP increased by 10!<br/>`;
-      }
-    }
   }
 
   // -- Render Logic --
@@ -1021,7 +782,14 @@ function App() {
         return (
           <div>
             <h2>Infinite Multiplayer (AI genned) - Setup</h2>
-            <div style={{background:'#f8f8ff',border:'1px solid #bcd',borderRadius:8,padding:12,margin:'18px 0',fontSize:16}}>
+            <div style={{
+              background: '#f8f8ff',
+              border: '1px solid #bcd',
+              borderRadius: 8,
+              padding: 12,
+              margin: '18px 0',
+              fontSize: 16
+            }}>
               <b>Tip:</b> {currentTip}
             </div>
             <button onClick={() => {
@@ -1031,18 +799,23 @@ function App() {
               setInfinitePlayers([{ name: playerName || 'Player', hp: MAX_HP }]);
               setInfiniteRound(1);
               setInfiniteLog([]);
-            }}>Start Infinite Battle</button>
-            <button style={{marginLeft:16}} onClick={() => {
+            }}>
+              Start Infinite Battle
+            </button>
+            <button style={{ marginLeft: 16 }} onClick={() => {
               setPendingStartingPowerUps(getDynamicPowerUps(3));
               setShowStartingPowerUp(true);
               setQuickStart(true);
               setInfinitePlayers([{ name: playerName || 'Player', hp: MAX_HP }]);
               setInfiniteRound(5);
               setInfiniteLog([]);
-            }}>Quick Start (Round 5)</button>
+            }}>
+              Quick Start (Round 5)
+            </button>
           </div>
         );
       }
+      
       if (gameState === GAME_STATES.INFINITE_BATTLE) {
         return (
           <>

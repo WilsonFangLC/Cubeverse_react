@@ -37,12 +37,21 @@ const AI_QUIRKS = [
   { name: 'Time Freeze', desc: 'AI always gets the same time (12.00s).', effect: 'freeze' },
   { name: 'Combo Breaker', desc: 'Combos reset every turn.', effect: 'combo_breaker' },
   { name: 'Lucky Hit', desc: 'First hit this round deals +10 bonus damage.', effect: 'lucky_hit' },
-  { name: 'No Quirk', desc: 'No special effect this round.', effect: 'none' }
+  { name: 'No Quirk', desc: 'No special effect this round.', effect: 'none' },
+  { name: 'Mirror Match', desc: 'AI copies your time exactly this round.', effect: 'mirror' },
+  // Removed Sudden Death and other too hard quirks
+  { name: 'Combo Drain', desc: 'You lose all combo bonuses this round.', effect: 'combo_drain' },
+  { name: 'Heal AI', desc: 'AI heals 10 HP if it wins this round.', effect: 'heal_ai' },
+  { name: 'Weak Hit', desc: 'All damage is halved this round.', effect: 'half_damage' },
+  { name: 'Parity Error', desc: 'You must enter an odd time (e.g., 11.11, 13.33) or take +2s penalty.', effect: 'parity_error' },
+  { name: 'OLL Skip', desc: 'You get a 1.5s time bonus this round.', effect: 'oll_skip' },
+  { name: 'Lockup', desc: 'Your time is increased by 1.5s this round.', effect: 'lockup' },
+  { name: 'Inspection+', desc: 'See AI’s time before submitting.', effect: 'inspection_plus' },
+  { name: '+2 Penalty', desc: 'Your time is increased by 2s this round.', effect: 'plus2_penalty' }
 ];
 // --- More Quirks and Power-Ups for Variety ---
 AI_QUIRKS.push(
   { name: 'Mirror Match', desc: 'AI copies your time exactly this round.', effect: 'mirror' },
-  { name: 'Sudden Death', desc: 'First to take damage this round loses all HP.', effect: 'sudden_death' },
   { name: 'Combo Drain', desc: 'You lose all combo bonuses this round.', effect: 'combo_drain' },
   { name: 'Heal AI', desc: 'AI heals 10 HP if it wins this round.', effect: 'heal_ai' },
   { name: 'Weak Hit', desc: 'All damage is halved this round.', effect: 'half_damage' }
@@ -56,20 +65,21 @@ AI_QUIRKS.push(
   { name: '+2 Penalty', desc: 'Your time is increased by 2s this round.', effect: 'plus2_penalty' }
 );
 
-function getRandomAI() {
-  const name = AI_NAMES[Math.floor(Math.random() * AI_NAMES.length)];
-  const avatar = AI_AVATARS[Math.floor(Math.random() * AI_AVATARS.length)];
-  const quirk = AI_QUIRKS[Math.floor(Math.random() * AI_QUIRKS.length)];
-  return { name, avatar, quirk };
-}
-
 // --- Boss Data for Infinite Mode ---
 const BOSS_AI = [
-  { name: 'The Scrambler', avatar: '/rob.png', superQuirk: { name: 'Triple Damage', desc: 'All damage is tripled this round.', effect: 'triple_damage' } },
-  { name: 'Time Lord', avatar: '/smf.png', superQuirk: { name: 'Time Lock', desc: 'AI always gets 9.00s this round.', effect: 'boss_time_9' } },
-  { name: 'Nullifier', avatar: '/czy.png', superQuirk: { name: 'No Power-Ups', desc: 'You cannot use power-ups this round.', effect: 'no_powerups' } },
-  { name: 'Combo King', avatar: '/victory.png', superQuirk: { name: 'Combo Steal', desc: 'Boss steals your combo bonus this round.', effect: 'steal_combo' } },
-  { name: 'The Wall', avatar: '/defeat.png', superQuirk: { name: 'Double HP', desc: 'Boss has double HP this round.', effect: 'double_hp' } }
+  { name: 'Old Cow Turtle', avatar: '/old_cow_turtle_boss.png', superQuirk: { name: 'Triple Damage', desc: 'All damage is tripled this round.', effect: 'triple_damage' } },
+  // Removed BLD Master (Blindfolded Fury)
+  { name: 'Rob', avatar: '/rob.png', superQuirk: { name: 'Robotic Precision', desc: 'AI always gets 8.00s this round.', effect: 'boss_time_8' } },
+  { name: 'Sleepy Turtle', avatar: '/sleep_gui.png', superQuirk: { name: 'Sleep Mode', desc: 'AI is slower, but heals 20 HP if it wins.', effect: 'heal_on_win' } },
+  { name: 'Cute Cow Turtle', avatar: '/cute_cow_turtle_boss.png', superQuirk: { name: 'Cuteness Overload', desc: 'You lose 10 HP at the start of the round.', effect: 'start_hp_loss' } },
+  { name: 'SMF', avatar: '/smf.png', superQuirk: { name: 'Time Lock', desc: 'AI always gets 9.00s this round.', effect: 'boss_time_9' } },
+  { name: 'Czy', avatar: '/czy.png', superQuirk: { name: 'No Power-Ups', desc: 'You cannot use power-ups this round.', effect: 'no_powerups' } },
+  { name: 'Tomb Turtle', avatar: '/Tomb_turtle_boss.png', superQuirk: { name: 'Double HP', desc: 'Boss has double HP this round.', effect: 'double_hp' } },
+  // Removed Exe Sudden Death boss
+  { name: 'Tomb Turtle Cute', avatar: '/tomb_turtle_cute.png', superQuirk: { name: 'Combo Steal', desc: 'Boss steals your combo bonus this round.', effect: 'steal_combo' } },
+  { name: 'Tymon', avatar: '/tymon.png', superQuirk: { name: 'Tymon Power', desc: 'AI gets a random time between 4.00 and 6.00s.', effect: 'tymon_power' } },
+  { name: 'FLC', avatar: '/flc.png', superQuirk: { name: 'No Combos', desc: 'Combo bonuses are disabled this round.', effect: 'no_combos' } },
+  { name: 'YZA', avatar: '/yza.png', superQuirk: { name: 'Combo Shield', desc: 'Boss keeps its combo even if it loses.', effect: 'combo_shield' } }
 ];
 
 // --- Infinite Mode Power-Ups ---
@@ -80,6 +90,9 @@ const POWER_UPS = [
   { name: '+1 Combo Bonus', desc: 'Permanently gain +1 combo bonus.', effect: 'perm_combo' },
   { name: 'Shield', desc: 'Block all damage next round.', effect: 'shield' },
   { name: 'Deal +10 Next Hit', desc: 'Next time you deal damage, add +10.', effect: 'plus10_next' },
+  // New Power-Ups
+  { name: 'Odd Master', desc: 'If your solve time has an odd integer part, deal +7 damage.', effect: 'odd_master' },
+  { name: 'HP Boost', desc: 'Permanently increase your max HP by 10.', effect: 'hp_boost' },
 ];
 // --- More Quirks and Power-Ups for Variety ---
 POWER_UPS.push(
@@ -193,6 +206,10 @@ function App() {
   const [infiniteAI, setInfiniteAI] = useState(null); // { name, avatar, quirk }
   const [infiniteQuirkUsed, setInfiniteQuirkUsed] = useState(false); // for quirks like Lucky Hit
 
+  // --- Infinite mode: Track used bosses and power-ups to prevent repeats ---
+  const [usedBosses, setUsedBosses] = useState([]); // Boss indices used this run
+  const [usedPowerUps, setUsedPowerUps] = useState([]); // Power-up effects used this run
+
   // Infinite mode state additions
   const [pendingPowerUps, setPendingPowerUps] = useState([]); // Power-ups to choose from
   const [activePowerUps, setActivePowerUps] = useState([]); // Power-ups in effect
@@ -288,6 +305,28 @@ function App() {
     // Always random order, no repeats until pool exhausted
     const pool = infiniteRound > 10 ? availablePowerUps : availablePowerUps.slice(0, 6);
     const shuffled = pool.sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, n);
+  }
+
+  // --- Infinite mode: AI selection now always uses BOSS_AI ---
+  function getRandomInfiniteAI(usedIndices = []) {
+    // Pick a random AI from BOSS_AI not already used this run
+    const unused = BOSS_AI.map((_, idx) => idx).filter(idx => !usedIndices.includes(idx));
+    let idx;
+    if (unused.length > 0) {
+      idx = unused[Math.floor(Math.random() * unused.length)];
+    } else {
+      idx = Math.floor(Math.random() * BOSS_AI.length); // fallback: allow repeats
+    }
+    const ai = BOSS_AI[idx];
+    return { ...ai, isBoss: false, idx };
+  }
+
+  // --- Power-Ups: filter out repeats ---
+  function getDynamicPowerUps(n = 3, usedEffects = []) {
+    let available = POWER_UPS.filter(pu => !usedEffects.includes(pu.effect));
+    if (available.length < n) available = [...POWER_UPS]; // fallback if all used
+    const shuffled = available.sort(() => 0.5 - Math.random());
     return shuffled.slice(0, n);
   }
 
@@ -585,29 +624,20 @@ function App() {
   };
 
   const handlePlayAgain = () => {
+    setUsedBosses([]);
+    setUsedPowerUps([]);
     window.location.reload();
   };
 
   // Infinite: start new round
   function startInfiniteRound() {
-    const isBoss = BOSS_ROUNDS.includes(infiniteRound);
-    setIsBossRound(isBoss);
-    let aiHP = MAX_HP + 5 * infiniteRound;
-    if (infiniteRound <= 5) aiHP = Math.round(MAX_HP * 0.6 + 3 * infiniteRound); // Lower early HP
-    if (isBoss) {
-      const boss = BOSS_AI[bossIndex % BOSS_AI.length];
-      setInfiniteAI({ name: boss.name, avatar: boss.avatar, quirk: boss.superQuirk, isBoss: true });
-      setEnemyHP(MAX_HP * 2);
-      setBossIndex(bossIndex + 1);
-    } else {
-      const ai = getRandomAI();
-      ai.quirk = getDynamicQuirk();
-      setInfiniteAI({ ...ai, isBoss: false });
-      setEnemyHP(aiHP);
-    }
+    const aiObj = getRandomInfiniteAI(usedBosses);
+    setInfiniteAI({ name: aiObj.name, avatar: aiObj.avatar, quirk: aiObj.superQuirk, isBoss: false });
+    setEnemyHP(MAX_HP + 5 * infiniteRound);
+    setUsedBosses(prev => [...prev, aiObj.idx]);
     setInfiniteQuirkUsed(false);
     setCurrentScramble(getRandomRow()?.scr || 'Unknown scramble');
-    setQuirkHistory(prev => [...prev, (isBoss ? BOSS_AI[bossIndex % BOSS_AI.length].superQuirk : infiniteAI?.quirk)]);
+    setQuirkHistory(prev => [...prev, aiObj.superQuirk]);
     setShowRoundBanner(true);
     setCurrentTip(getRandomTip());
     if (infiniteRound === 1 && scrambleChoice) {
@@ -648,11 +678,17 @@ function App() {
     if (!infiniteAI) return;
     const ai = infiniteAI;
     let aiTime;
-    // Boss quirk: Time Lock should always set aiTime to 9.00
-    if (ai.isBoss && ai.quirk.effect === 'boss_time_9') {
+    // Fixed time quirks take precedence
+    if (ai.quirk.effect === 'boss_time_9') {
       aiTime = 9.00;
+    } else if (ai.quirk.effect === 'boss_time_8') {
+      aiTime = 8.00;
     } else if (ai.quirk.effect === 'freeze') {
       aiTime = 12.00;
+    } else if (ai.quirk.effect === 'mirror') {
+      aiTime = playerTime;
+    } else if (ai.quirk.effect === 'tymon_power') {
+      aiTime = 4 + Math.random() * 2;
     } else {
       // Make AI stronger as rounds increase (lower time = stronger)
       // Early rounds: AI is easier (higher mean), later rounds: AI is faster (lower mean)
@@ -671,27 +707,42 @@ function App() {
       log += `<b>Your Power-Ups:</b> ${activePowerUps.map(pu => pu.name).join(', ')}<br/>`;
     }
     let playerWins = playerTime < aiTime;
-    let damage = Math.round(Math.abs(playerTime - aiTime) * 5 + 5);
-    if (infiniteRound <= 5) damage = Math.round(damage * 1.5); // More damage early
+    let baseDamageFormula = `|${playerTime.toFixed(2)} - ${aiTime.toFixed(2)}| * 5 + 5`;
+    let baseDamage = Math.abs(playerTime - aiTime) * 5 + 5;
+    let damage = Math.round(baseDamage);
+    let damageFormula = baseDamageFormula;
+    let formulaSteps = [`Base: ${baseDamageFormula} = ${baseDamage.toFixed(2)}`];
+    if (infiniteRound <= 5) {
+      damage = Math.round(damage * 1.5); // More damage early
+      damageFormula += `, then * 1.5 (early round)`;
+      formulaSteps.push(`Early round: ${Math.round(baseDamage)} * 1.5 = ${Math.round(baseDamage * 1.5)}`);
+    }
     if (permComboBonus) {
       damage += permComboBonus;
-      log += `Permanent combo bonus: +${permComboBonus} damage<br/>`;
+      damageFormula += `, +${permComboBonus} perm combo bonus`;
+      formulaSteps.push(`+${permComboBonus} permanent combo bonus`);
     }
+    let nextPlayerHP = playerHP;
+    let nextAIHP = enemyHP;
     if (activePowerUps.some(pu => pu.effect === 'halve_next_damage') && !playerWins) {
-      log += `Halve Next Damage active: Damage to you is halved this round.<br/>`;
       damage = Math.ceil(damage / 2);
+      damageFormula += ', then halved (Halve Next Damage)';
+      formulaSteps.push(`Halved: ceil(prev / 2) = ${damage}`);
     }
     if (activePowerUps.some(pu => pu.effect === 'plus10_next') && playerWins) {
-      log += `Deal +10 Next Hit active: +10 damage to AI this round.<br/>`;
       damage += 10;
+      damageFormula += ', +10 (Deal +10 Next Hit)';
+      formulaSteps.push('+10 from Deal +10 Next Hit');
     }
     if (activePowerUps.some(pu => pu.effect === 'shield') && !playerWins) {
-      log += `Shield active: You block all damage this round!<br/>`;
       damage = 0;
+      damageFormula += ', set to 0 (Shield)';
+      formulaSteps.push('Set to 0 by Shield');
     }
     if (ai.quirk.effect === 'double_damage') {
-      log += `Quirk effect: All damage is doubled!<br/>`;
       damage *= 2;
+      damageFormula += ', *2 (Double Damage quirk)';
+      formulaSteps.push('Doubled by Double Damage quirk');
     }
     if (ai.quirk.effect === 'reverse') {
       log += `Quirk effect: Slower solver wins this round!<br/>`;
@@ -710,19 +761,6 @@ function App() {
       aiTime = playerTime;
       log += `Quirk effect: AI copies your time exactly!<br/>`;
     }
-    if (ai.quirk.effect === 'sudden_death') {
-      if (playerTime !== aiTime) {
-        if (playerTime < aiTime) {
-          nextAIHP = 0;
-          log += `Sudden Death: AI loses all HP!<br/>`;
-        } else {
-          nextPlayerHP = 0;
-          log += `Sudden Death: You lose all HP!<br/>`;
-        }
-      } else {
-        log += `Sudden Death: Tie, no one loses HP.<br/>`;
-      }
-    }
     if (ai.quirk.effect === 'combo_drain') {
       setComboCount(0);
       log += `Quirk effect: Your combo bonus is drained!<br/>`;
@@ -733,7 +771,8 @@ function App() {
     }
     if (ai.quirk.effect === 'half_damage') {
       damage = Math.ceil(damage / 2);
-      log += `Quirk effect: All damage is halved!<br/>`;
+      damageFormula += ', then halved (Half Damage quirk)';
+      formulaSteps.push(`Halved: ceil(prev / 2) = ${damage}`);
     }
     if (ai.quirk.effect === 'parity_error') {
       if (Math.floor(playerTime) % 2 === 0) {
@@ -770,16 +809,14 @@ function App() {
     // Consistency bonus: if playerTime within ±0.2s of previous, +3 damage
     if (typeof processInfiniteTurn.lastTime === 'number' && Math.abs(playerTime - processInfiniteTurn.lastTime) <= 0.2) {
       damage += 3;
-      log += `Consistency Bonus: +3 damage for similar time!<br/>`;
+      damageFormula += ', +3 (Consistency Bonus)';
+      formulaSteps.push('+3 Consistency Bonus');
     }
-    processInfiniteTurn.lastTime = playerTime;
     // PB tracking: highlight if this is the fastest time this run
     if (!processInfiniteTurn.pb || playerTime < processInfiniteTurn.pb) {
       processInfiniteTurn.pb = playerTime;
       log += `<span style='color:#16a085'><b>New PB for this run: ${playerTime.toFixed(2)}s!</b></span><br/>`;
     }
-    let nextPlayerHP = playerHP;
-    let nextAIHP = enemyHP;
     if (playerWins) {
       nextAIHP = Math.max(0, enemyHP - damage);
       log += `<span style='color:green'><b>You win!</b> ${ai.name} loses <b>${damage}</b> HP.</span><br/>`;
@@ -788,6 +825,8 @@ function App() {
       log += `<span style='color:red'><b>You lose!</b> You take <b>${damage}</b> HP damage.</span><br/>`;
     }
     log += `<b>Your HP:</b> ${nextPlayerHP} / ${MAX_HP} | <b>${ai.name} HP:</b> ${nextAIHP}<br/>`;
+    log += `<b>Damage Calculation:</b> ${damageFormula}<br/>`;
+    log += `<b>Steps:</b> ${formulaSteps.join(' → ')}<br/>`;
     log += `</p>`;
     setPlayerHP(nextPlayerHP);
     setEnemyHP(nextAIHP);
@@ -813,7 +852,7 @@ function App() {
       }
       // Every 2 rounds, offer power-up
       if ((infiniteRound + 1) % 2 === 0) {
-        setPendingPowerUps(getDynamicPowerUps());
+        setPendingPowerUps(getDynamicPowerUps(3, usedPowerUps));
         setShowPowerUpChoice(true);
       } else {
         setTimeout(() => {
@@ -859,6 +898,22 @@ function App() {
       }
       return newTimes;
     });
+
+    if (activePowerUps.some(pu => pu.effect === 'odd_master') && playerWins) {
+      if (Math.floor(playerTime) % 2 === 1) {
+        damage += 7;
+        damageFormula += ', +7 (Odd Master)';
+        formulaSteps.push('+7 Odd Master');
+      }
+    }
+    if (activePowerUps.some(pu => pu.effect === 'hp_boost')) {
+      // Only apply once per power-up selection
+      if (!window._hpBoosted) {
+        window._hpBoosted = true;
+        setPlayerHP(hp => Math.min(hp + 10, MAX_HP + 10));
+        log += `HP Boost: Max HP increased by 10!<br/>`;
+      }
+    }
   }
 
   // -- Render Logic --
@@ -892,6 +947,7 @@ function App() {
                   onClick={() => {
                     setActivePowerUps(prev => [...prev, pu]);
                     setPowerupHistory(prev => [...prev, pu]);
+                    setUsedPowerUps(prev => [...prev, pu.effect]);
                     if (pu.effect === 'heal_20') setPlayerHP(hp => Math.min(hp + 20, MAX_HP));
                     if (pu.effect === 'perm_combo') setPermComboBonus(b => b + 1);
                     if (pu.effect === 'full_heal') setPlayerHP(MAX_HP);

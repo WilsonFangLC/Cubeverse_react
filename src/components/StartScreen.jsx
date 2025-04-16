@@ -15,6 +15,8 @@ function StartScreen({ onStartBattle }) {
 
   return (
     <>
+      {/* Logo in top-right corner */}
+      <img src="/Niu_logo.png" alt="Niu Logo" style={{ position: 'absolute', top: 24, right: 32, width: 80, height: 'auto', zIndex: 10 }} />
       <h1>Cubeverse: Simultaneous Cube Challenge</h1>
       <h5>Developed by Lichi</h5>
       <img src="/coverimage.png" alt="Logo" style={{ width: '700px', height: 'auto' }} /> 

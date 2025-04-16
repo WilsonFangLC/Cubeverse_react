@@ -3,6 +3,21 @@ import { Line } from 'react-chartjs-2';
 import { Chart, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend } from 'chart.js';
 Chart.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);
 
+function CollapsiblePanel({ title, children, defaultOpen = false, style = {} }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div style={{ marginBottom: 10, ...style }}>
+      <div
+        style={{ cursor: 'pointer', fontWeight: 'bold', fontSize: 15, userSelect: 'none', display: 'flex', alignItems: 'center' }}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span style={{ marginRight: 6 }}>{open ? '▼' : '▶'}</span> {title}
+      </div>
+      {open && <div style={{ marginTop: 6 }}>{children}</div>}
+    </div>
+  );
+}
+
 function InfiniteBattleScreen({
   infiniteRound,
   infiniteBestRound,
@@ -209,6 +224,10 @@ function InfiniteBattleScreen({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [infiniteInput, infiniteAI, infiniteRound]);
 
+  // --- Log Collapsible ---
+  const [logCollapsed, setLogCollapsed] = useState(true);
+  const logToShow = logCollapsed ? infiniteLog.slice(-3) : infiniteLog;
+
   // --- Chart Data ---
   const chartData = {
     labels: solveTimes.map((_, i) => i + 1),
@@ -277,8 +296,8 @@ function InfiniteBattleScreen({
   };
 
   return (
-    <div style={{display:'flex',alignItems:'flex-start',gap:32}}>
-      <div style={{flex:1}}>
+    <div style={{display:'flex',alignItems:'flex-start',gap:40}}>
+      <div style={{flex:1, minWidth:0}}>
         <h2>Infinite Multiplayer (AI genned) - Round {infiniteRound}</h2>
         {infiniteAI?.isBoss && (
           <div style={{
@@ -417,15 +436,22 @@ function InfiniteBattleScreen({
           <div style={{fontSize:18,color:'#1a7',margin:'10px 0'}}>Timer: {timerValue.toFixed(2)}s (press any key to stop)</div>
         )}
         <div>
-          <h3>Log</h3>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <h3 style={{margin:0}}>Log</h3>
+            {infiniteLog.length > 3 && (
+              <button onClick={() => setLogCollapsed(l => !l)} style={{fontSize:13,padding:'2px 10px',marginLeft:8}}>
+                {logCollapsed ? `Show All (${infiniteLog.length})` : 'Show Less'}
+              </button>
+            )}
+          </div>
           <div style={{ maxHeight: 200, overflowY: 'auto', background: '#fafbfc', border: '1px solid #eee', borderRadius: 8, padding: 10 }}>
-            {infiniteLog.map((entry, idx) => (
+            {logToShow.map((entry, idx) => (
               <div key={idx} style={{ marginBottom: 10 }} dangerouslySetInnerHTML={{ __html: entry }} />
             ))}
           </div>
         </div>
       </div>
-      <div style={{width:260,minWidth:200,background:'#f8fafd',border:'1px solid #bcd',borderRadius:8,padding:'14px 12px',fontSize:15}}>
+      <div style={{width:280,minWidth:200,background:'#f8fafd',border:'1px solid #bcd',borderRadius:8,padding:'14px 12px',fontSize:15}}>
         <b>Run History</b>
         <div style={{marginTop:10}}>
           <b>Solves:</b>
@@ -456,36 +482,59 @@ function InfiniteBattleScreen({
             <Line data={chartData} options={chartOptions} height={120} />
           </div>
         </div>
-        <div style={{marginTop:10}}>
-          <b>Quirks Faced:</b>
+        <CollapsiblePanel title="Quirks Faced" defaultOpen={false} style={{fontSize:14}}>
           <ul style={{margin:0,paddingLeft:18}}>
             {quirkHistory.filter(Boolean).length > 0 ? quirkHistory.filter(Boolean).map((q, i) => (
               <li key={q.name+i} title={q.desc}>{q.name}</li>
             )) : <li style={{color:'#888'}}>None yet</li>}
           </ul>
-        </div>
-        <div style={{marginTop:10}}>
-          <b>Power-Ups Chosen:</b>
+        </CollapsiblePanel>
+        <CollapsiblePanel title="Power-Ups Chosen" defaultOpen={false} style={{fontSize:14}}>
           <ul style={{margin:0,paddingLeft:18}}>
             {powerupHistory.length > 0 ? powerupHistory.map((p, i) => (
               <li key={p.name+i} title={p.desc}>{p.name}</li>
             )) : <li style={{color:'#888'}}>None yet</li>}
           </ul>
-        </div>
-        <div style={{marginTop:14,padding:'8px 10px',background:'#f9fbe7',border:'1px solid #e1e7b6',borderRadius:6,fontSize:13}}>
-          <b>Scoring Rules:</b>
+        </CollapsiblePanel>
+        <CollapsiblePanel title="Scoring Rules" defaultOpen={false} style={{fontSize:13,background:'#f9fbe7',border:'1px solid #e1e7b6',borderRadius:6,padding:'8px 10px'}}>
           <ul style={{margin:0,paddingLeft:18}}>
             {scoringRules.map(rule => <li key={rule}>{rule}</li>)}
           </ul>
-        </div>
-        <div style={{margin:'10px 0',padding:'8px 10px',background:'#f8f8ff',border:'1px solid #bcd',borderRadius:6,fontSize:13}}>
-          <b>Session Stats:</b>
+        </CollapsiblePanel>
+        <CollapsiblePanel title="Session Stats" defaultOpen={false} style={{fontSize:13,background:'#f8f8ff',border:'1px solid #bcd',borderRadius:6,padding:'8px 10px'}}>
           <div>Count: {sessionStats.count}</div>
           <div>Mean: {sessionStats.mean ? sessionStats.mean.toFixed(2) : '-'}</div>
           <div>Stddev: {sessionStats.stddev ? sessionStats.stddev.toFixed(2) : '-'}</div>
           <div>Best: {sessionStats.best ? sessionStats.best.toFixed(2) : '-'}</div>
           <div>Worst: {sessionStats.worst ? sessionStats.worst.toFixed(2) : '-'}</div>
-        </div>
+        </CollapsiblePanel>
+        {/* --- Damage Breakdown Panel --- */}
+        <CollapsiblePanel title="Damage Breakdown (Last Round)" defaultOpen={true} style={{fontSize:13,background:'#fffbe7',border:'1px solid #e1e7b6',borderRadius:6,padding:'8px 10px'}}>
+          {(() => {
+            // Try to extract damage formula and steps from the latest log entry
+            const lastLog = infiniteLog && infiniteLog.length > 0 ? infiniteLog[infiniteLog.length-1] : null;
+            if (!lastLog) return <div style={{color:'#888'}}>No round played yet.</div>;
+            // Extract formula and steps using regex
+            const formulaMatch = lastLog.match(/<b>Damage Calculation:<\/b> ([^<]*)<br\/>/);
+            const stepsMatch = lastLog.match(/<b>Steps:<\/b> ([^<]*)<br\/>/);
+            const formula = formulaMatch ? formulaMatch[1] : null;
+            const steps = stepsMatch ? stepsMatch[1].split(' → ') : null;
+            if (!formula && !steps) return <div style={{color:'#888'}}>No damage breakdown found for last round.</div>;
+            return (
+              <div>
+                {formula && <div style={{marginBottom:6}}><b>Formula:</b> <span style={{fontFamily:'monospace'}}>{formula}</span></div>}
+                {steps && steps.length > 0 && (
+                  <div>
+                    <b>Steps:</b>
+                    <ol style={{margin:'6px 0 0 18px',padding:0}}>
+                      {steps.map((s,i) => <li key={i} style={{fontFamily:'monospace',fontSize:13}}>{s}</li>)}
+                    </ol>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </CollapsiblePanel>
       </div>
     </div>
   );
